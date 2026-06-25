@@ -517,8 +517,8 @@ class TestMEMANTOAPI:
             params={
                 "memory_type": "fact",
                 "title": "Should not store",
-                "content": "This token was terminated.",
             },
+            json={"content": "This token was terminated."},
         )
 
         assert response.status_code == 401

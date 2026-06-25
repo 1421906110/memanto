@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import jwt
+from pydantic import ValidationError
 
 from memanto.app.config import get_data_dir, settings
 from memanto.app.core import create_memory_scope
@@ -166,7 +167,12 @@ class SessionService:
                     f"Session {token.session_id} expired at {token.expires_at}"
                 )
 
-            session = self.get_session(token.agent_id)
+            try:
+                session = self.get_session(token.agent_id)
+            except (OSError, json.JSONDecodeError, ValidationError) as exc:
+                raise InvalidSessionTokenError(
+                    f"Session {token.session_id} is no longer active"
+                ) from exc
             if not session:
                 raise InvalidSessionTokenError(
                     f"Session {token.session_id} is no longer active"

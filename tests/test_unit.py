@@ -95,6 +95,18 @@ class TestSessionService:
         with pytest.raises(InvalidSessionTokenError):
             session_service.validate_session(session.session_token)
 
+    def test_validate_rejects_malformed_persisted_session(self, session_service):
+        """Malformed persisted session records should fail closed."""
+        session = session_service.create_session(
+            agent_id="test-agent",
+            duration_hours=1,
+        )
+        session_file = session_service.sessions_dir / "test-agent.json"
+        session_file.write_text("{not valid json", encoding="utf-8")
+
+        with pytest.raises(InvalidSessionTokenError):
+            session_service.validate_session(session.session_token)
+
     def test_validate_expired_session(self, session_service):
         """Test session validation fails for expired session"""
         # Create session with very short duration

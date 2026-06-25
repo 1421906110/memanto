@@ -489,6 +489,42 @@ class TestMEMANTOAPI:
         assert "ended_at" in data
 
     @pytest.mark.asyncio
+    async def test_deactivated_session_token_cannot_write_memory(
+        self, client, auth_headers, mock_moorcheh
+    ):
+        """A token from a terminated session must not authorize memory writes."""
+        await client.post(
+            "/api/v2/agents",
+            headers=auth_headers,
+            json={"agent_id": self.TEST_AGENT_ID},
+        )
+        activate_resp = await client.post(
+            f"/api/v2/agents/{self.TEST_AGENT_ID}/activate", headers=auth_headers
+        )
+        token = activate_resp.json()["session_token"]
+        session_headers = {**auth_headers, "X-Session-Token": token}
+
+        deactivate_resp = await client.post(
+            f"/api/v2/agents/{self.TEST_AGENT_ID}/deactivate",
+            headers=session_headers,
+        )
+        assert deactivate_resp.status_code == 200
+
+        mock_moorcheh.documents.upload.return_value = {"status": "success"}
+        response = await client.post(
+            f"/api/v2/agents/{self.TEST_AGENT_ID}/remember",
+            headers=session_headers,
+            params={
+                "memory_type": "fact",
+                "title": "Should not store",
+                "content": "This token was terminated.",
+            },
+        )
+
+        assert response.status_code == 401
+        mock_moorcheh.documents.upload.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_global_status(self, client, auth_headers):
         """Test GET /api/v2/status returns active session info without auth params"""
         await client.post(

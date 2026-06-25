@@ -166,6 +166,22 @@ class SessionService:
                     f"Session {token.session_id} expired at {token.expires_at}"
                 )
 
+            session = self.get_session(token.agent_id)
+            if not session:
+                raise InvalidSessionTokenError(
+                    f"Session {token.session_id} is no longer active"
+                )
+
+            if session.session_id != token.session_id:
+                raise InvalidSessionTokenError(
+                    f"Session token {token.session_id} is no longer current"
+                )
+
+            if not session.is_active():
+                raise InvalidSessionTokenError(
+                    f"Session {token.session_id} is {session.status.value}"
+                )
+
             return token
 
         except jwt.ExpiredSignatureError:

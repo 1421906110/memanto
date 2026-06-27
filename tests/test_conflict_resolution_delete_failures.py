@@ -1,3 +1,5 @@
+"""Regression tests for conflict-resolution cleanup failures."""
+
 import json
 from unittest.mock import MagicMock
 
@@ -5,6 +7,7 @@ import pytest
 
 
 def _write_conflict_report(tmp_path, agent_id, date):
+    """Create a production-shaped conflict report for resolution tests."""
     conflicts_dir = tmp_path / ".memanto" / "conflicts"
     conflicts_dir.mkdir(parents=True)
     report_path = conflicts_dir / f"{agent_id}_{date}_conflicts.json"
@@ -38,6 +41,7 @@ def _write_conflict_report(tmp_path, agent_id, date):
 def test_conflict_stays_unresolved_when_required_delete_fails(
     module_path, class_name, tmp_path, monkeypatch
 ):
+    """Keep the persisted conflict unresolved when deletion raises."""
     client_module = pytest.importorskip(module_path)
     client_class = getattr(client_module, class_name)
     monkeypatch.setattr(
@@ -80,6 +84,7 @@ def test_conflict_stays_unresolved_when_required_delete_fails(
 def test_conflict_stays_unresolved_when_required_delete_returns_false(
     module_path, class_name, tmp_path, monkeypatch
 ):
+    """Keep the persisted conflict unresolved when deletion returns false."""
     client_module = pytest.importorskip(module_path)
     client_class = getattr(client_module, class_name)
     monkeypatch.setattr(
@@ -123,6 +128,7 @@ def test_conflict_stays_unresolved_when_required_delete_returns_false(
 def test_manual_conflict_resolution_does_not_store_replacement_after_delete_failure(
     module_path, class_name, delete_result, tmp_path, monkeypatch
 ):
+    """Block manual replacement storage until required deletions succeed."""
     client_module = pytest.importorskip(module_path)
     client_class = getattr(client_module, class_name)
     monkeypatch.setattr(

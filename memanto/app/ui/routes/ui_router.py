@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from memanto.app.clients.backend import Backend
 from memanto.app.config import settings
 from memanto.cli.client.direct_client import DirectClient
-from memanto.cli.config.manager import ConfigManager
+from memanto.cli.config.manager import ConfigManager, _validate_server_port
 from memanto.cli.connect.agent_registry import AGENT_REGISTRY, list_agents
 from memanto.cli.connect.engine import install_agent, remove_agent
 
@@ -142,7 +142,13 @@ async def update_ui_config(updates: dict):
         data = _config_manager.load_yaml()
         if "server" not in data:
             data["server"] = {}
-        data["server"].update(updates["server"])
+        server_updates = dict(updates["server"])
+        if "port" in server_updates:
+            try:
+                server_updates["port"] = _validate_server_port(server_updates["port"])
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+        data["server"].update(server_updates)
         _config_manager.save_yaml(data)
 
     if "answer" in updates and isinstance(updates["answer"], dict):

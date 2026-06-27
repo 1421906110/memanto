@@ -1210,6 +1210,35 @@ class TestCWE200ApiKeyLeak:
         assert data["has_active_session"] is True
 
     @pytest.mark.asyncio
+    async def test_config_update_rejects_invalid_server_port(
+        self, client, _mock_ui_config_manager
+    ):
+        _mock_ui_config_manager.load_yaml.return_value = {"server": {}}
+
+        response = await client.patch(
+            "/api/ui/config", json={"server": {"url": "localhost", "port": 70000}}
+        )
+
+        assert response.status_code == 400
+        assert "server port" in response.json()["detail"]
+        _mock_ui_config_manager.save_yaml.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_config_update_normalizes_server_port(
+        self, client, _mock_ui_config_manager
+    ):
+        _mock_ui_config_manager.load_yaml.return_value = {"server": {}}
+
+        response = await client.patch(
+            "/api/ui/config", json={"server": {"url": "localhost", "port": "8000"}}
+        )
+
+        assert response.status_code == 200
+        _mock_ui_config_manager.save_yaml.assert_called_once_with(
+            {"server": {"url": "localhost", "port": 8000}}
+        )
+
+    @pytest.mark.asyncio
     async def test_traversal_filename_is_sanitized(
         self, client, auth_headers, mock_moorcheh
     ):

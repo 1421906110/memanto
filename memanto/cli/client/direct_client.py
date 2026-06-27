@@ -1365,23 +1365,30 @@ class DirectClient:
         result_details = {"action": action}
         delete_failures: list[str] = []
 
+        def delete_required_memory(
+            mem_id: str | None, label: str, result_key: str
+        ) -> None:
+            if not mem_id:
+                return
+            try:
+                deleted = write_service.delete_memory(mem_id, namespace)
+            except Exception as e:
+                delete_failures.append(f"{label} memory {mem_id}: {e}")
+                return
+
+            if not deleted:
+                delete_failures.append(f"{label} memory {mem_id}: not deleted")
+                return
+
+            result_details[result_key] = mem_id
+
         if action == "keep_old":
             # Keep old, delete new
-            if new_id:
-                try:
-                    write_service.delete_memory(new_id, namespace)
-                    result_details["deleted"] = new_id
-                except Exception as e:
-                    delete_failures.append(f"new memory {new_id}: {e}")
+            delete_required_memory(new_id, "new", "deleted")
 
         elif action == "keep_new":
             # Keep new, delete old
-            if old_id:
-                try:
-                    write_service.delete_memory(old_id, namespace)
-                    result_details["deleted"] = old_id
-                except Exception as e:
-                    delete_failures.append(f"old memory {old_id}: {e}")
+            delete_required_memory(old_id, "old", "deleted")
 
         elif action == "keep_both":
             # No-op — both memories remain active
@@ -1390,12 +1397,7 @@ class DirectClient:
         elif action == "remove_both":
             # Delete both memories
             for mem_id, label in [(old_id, "old"), (new_id, "new")]:
-                if mem_id:
-                    try:
-                        write_service.delete_memory(mem_id, namespace)
-                        result_details[f"deleted_{label}"] = mem_id
-                    except Exception as e:
-                        delete_failures.append(f"{label} memory {mem_id}: {e}")
+                delete_required_memory(mem_id, label, f"deleted_{label}")
 
         elif action == "manual":
             if not manual_content:
@@ -1403,12 +1405,7 @@ class DirectClient:
 
             # Delete both, store manual replacement
             for mem_id, label in [(old_id, "old"), (new_id, "new")]:
-                if mem_id:
-                    try:
-                        write_service.delete_memory(mem_id, namespace)
-                        result_details[f"deleted_{label}"] = mem_id
-                    except Exception as e:
-                        delete_failures.append(f"{label} memory {mem_id}: {e}")
+                delete_required_memory(mem_id, label, f"deleted_{label}")
 
             if delete_failures:
                 failures = "; ".join(delete_failures)

@@ -119,8 +119,9 @@ def test_conflict_stays_unresolved_when_required_delete_returns_false(
         ("memanto.cli.client.sdk_client", "SdkClient"),
     ],
 )
+@pytest.mark.parametrize("delete_result", [RuntimeError("backend unavailable"), False])
 def test_manual_conflict_resolution_does_not_store_replacement_after_delete_failure(
-    module_path, class_name, tmp_path, monkeypatch
+    module_path, class_name, delete_result, tmp_path, monkeypatch
 ):
     client_module = pytest.importorskip(module_path)
     client_class = getattr(client_module, class_name)
@@ -135,7 +136,10 @@ def test_manual_conflict_resolution_does_not_store_replacement_after_delete_fail
     report_path = _write_conflict_report(tmp_path, agent_id, date)
 
     write_service = MagicMock()
-    write_service.delete_memory.side_effect = RuntimeError("backend unavailable")
+    if isinstance(delete_result, Exception):
+        write_service.delete_memory.side_effect = delete_result
+    else:
+        write_service.delete_memory.return_value = delete_result
 
     client = client_class(api_key="test-key")
     client._get_write_service = lambda: write_service

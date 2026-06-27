@@ -1230,6 +1230,20 @@ class TestCWE200ApiKeyLeak:
         _mock_ui_config_manager.save_yaml.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_config_update_rejects_non_object_session_config(
+        self, client, _mock_ui_config_manager
+    ):
+        response = await client.patch(
+            "/api/ui/config",
+            json={"session": "bad"},
+        )
+
+        assert response.status_code == 400
+        assert "session must be an object" in response.json()["detail"]
+        _mock_ui_config_manager.set_session_config.assert_not_called()
+        _mock_ui_config_manager.save_yaml.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_config_update_accepts_valid_session_config(
         self, client, _mock_ui_config_manager
     ):

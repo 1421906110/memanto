@@ -56,6 +56,9 @@ def _validate_positive_int_config(name: str, value, minimum: int, maximum: int) 
 
 def _validate_session_config(updates: dict) -> dict:
     """Validate user-editable session config updates."""
+    if not isinstance(updates, dict):
+        raise ValueError("session config must be an object")
+
     allowed = set(_SESSION_CONFIG_LIMITS) | _SESSION_CONFIG_BOOLEANS
     rejected = set(updates) - allowed
     if rejected:
@@ -408,6 +411,8 @@ class ConfigManager:
         """Set validated session config values."""
         data = self.load_yaml()
         session = data.setdefault("session", {})
+        if not isinstance(session, dict):
+            raise ValueError("stored session config must be an object")
         session.update(_validate_session_config(updates))
         self.save_yaml(data)
 

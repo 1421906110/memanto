@@ -431,6 +431,17 @@ class TestSessionConfigValidation:
         with pytest.raises(ValueError):
             manager.set_session_config({key: value})
 
+    def test_set_session_config_rejects_corrupt_stored_session(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.save_yaml({"session": "bad"})
+
+        with pytest.raises(ValueError, match="stored session config must be an object"):
+            manager.set_session_config({"default_duration_hours": 12})
+
+        assert manager.load_yaml()["session"] == "bad"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

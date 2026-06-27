@@ -124,7 +124,9 @@ async def update_ui_config(updates: dict):
     if "schedule_time" in updates:
         _config_manager.set_schedule_time(updates["schedule_time"])
 
-    if "session" in updates and isinstance(updates["session"], dict):
+    if "session" in updates:
+        if not isinstance(updates["session"], dict):
+            raise HTTPException(status_code=400, detail="session must be an object")
         try:
             _config_manager.set_session_config(updates["session"])
         except ValueError as exc:

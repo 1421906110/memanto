@@ -11,6 +11,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv, set_key
 
@@ -276,6 +277,15 @@ class ConfigManager:
         server = self.load_yaml().get("server", {})
         host = server.get("url", "localhost")
         port = server.get("port", 8000)
+
+        host = str(host).strip() or "localhost"
+        if host.startswith(("http://", "https://")):
+            parsed = urlsplit(host)
+            netloc = parsed.netloc
+            if parsed.port is None:
+                netloc = f"{netloc}:{port}"
+            return urlunsplit((parsed.scheme, netloc, parsed.path.rstrip("/"), "", ""))
+
         return f"http://{host}:{port}"
 
     def get_server_config(self) -> dict:

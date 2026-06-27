@@ -391,5 +391,33 @@ class TestMEMANTOArchitecture:
         print("   ✅ NO tenant_id in token!")
 
 
+class TestServerConfigUrl:
+    """Regression tests for local REST API URL formatting."""
+
+    def test_server_url_defaults_to_http_for_host_and_port(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config("localhost", 8000)
+
+        assert manager.get_server_url() == "http://localhost:8000"
+
+    def test_server_url_preserves_configured_scheme(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config("https://memanto.example", 443)
+
+        assert manager.get_server_url() == "https://memanto.example:443"
+
+    def test_server_url_does_not_duplicate_explicit_url_port(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config("https://memanto.example:9443", 443)
+
+        assert manager.get_server_url() == "https://memanto.example:9443"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

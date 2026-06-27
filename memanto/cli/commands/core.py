@@ -649,7 +649,6 @@ def status():
 
     # Configuration
     is_configured = config_manager.is_configured()
-    server_cfg = config_manager.get_server_config()
 
     cfg_table = Table(show_header=False, box=None, padding=(0, 2))
     cfg_table.add_column("Key", style="dim")
@@ -675,7 +674,7 @@ def status():
         except Exception:
             cfg_table.add_row("On-Prem Server", "[red]● offline[/red]")
 
-    server_url = f"http://{server_cfg['url']}:{server_cfg['port']}"
+    server_url = config_manager.get_server_url()
     if is_configured:
         cfg_table.add_row("Local REST API URL", server_url)
         if backend == Backend.CLOUD:

@@ -1224,6 +1224,20 @@ class TestCWE200ApiKeyLeak:
         _mock_ui_config_manager.save_yaml.assert_not_called()
 
     @pytest.mark.asyncio
+    async def test_config_update_rejects_invalid_server_port_before_other_saves(
+        self, client, _mock_ui_config_manager
+    ):
+        response = await client.patch(
+            "/api/ui/config",
+            json={"schedule_time": "09:00", "server": {"port": 70000}},
+        )
+
+        assert response.status_code == 400
+        assert "server port" in response.json()["detail"]
+        _mock_ui_config_manager.set_schedule_time.assert_not_called()
+        _mock_ui_config_manager.save_yaml.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_config_update_normalizes_server_port(
         self, client, _mock_ui_config_manager
     ):

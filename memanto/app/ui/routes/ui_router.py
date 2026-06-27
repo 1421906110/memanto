@@ -121,6 +121,14 @@ async def update_ui_config(updates: dict):
             detail=f"Cannot update keys: {', '.join(rejected)}. Allowed: {', '.join(allowed_keys)}",
         )
 
+    if "server" in updates and isinstance(updates["server"], dict):
+        server_updates = updates["server"]
+        if "port" in server_updates:
+            try:
+                server_updates["port"] = _validate_server_port(server_updates["port"])
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     if "schedule_time" in updates:
         _config_manager.set_schedule_time(updates["schedule_time"])
 
@@ -142,13 +150,7 @@ async def update_ui_config(updates: dict):
         data = _config_manager.load_yaml()
         if "server" not in data:
             data["server"] = {}
-        server_updates = dict(updates["server"])
-        if "port" in server_updates:
-            try:
-                server_updates["port"] = _validate_server_port(server_updates["port"])
-            except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
-        data["server"].update(server_updates)
+        data["server"].update(updates["server"])
         _config_manager.save_yaml(data)
 
     if "answer" in updates and isinstance(updates["answer"], dict):

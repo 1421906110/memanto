@@ -418,6 +418,17 @@ class TestServerConfigUrl:
 
         assert manager.get_server_url() == "https://memanto.example:9443"
 
+    @pytest.mark.parametrize("bad_url", ["http://localhost:abc", "http://localhost:999999"])
+    def test_server_url_falls_back_when_explicit_url_port_is_malformed(
+        self, tmp_path, bad_url
+    ):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config(bad_url, 8000)
+
+        assert manager.get_server_url() == "http://localhost:8000"
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

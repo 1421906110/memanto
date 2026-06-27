@@ -282,7 +282,12 @@ class ConfigManager:
         if host.startswith(("http://", "https://")):
             parsed = urlsplit(host)
             netloc = parsed.netloc
-            if parsed.port is None:
+            try:
+                explicit_port = parsed.port
+            except ValueError:
+                explicit_port = None
+                netloc = parsed.hostname or "localhost"
+            if explicit_port is None:
                 netloc = f"{netloc}:{port}"
             return urlunsplit((parsed.scheme, netloc, parsed.path.rstrip("/"), "", ""))
 

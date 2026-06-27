@@ -29,6 +29,34 @@ def _normalize_duplicated_api_key(key: str) -> str:
     return key
 
 
+def _validate_int_range(name: str, value, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    try:
+        validated = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{name} must be an integer between {minimum} and {maximum}"
+        ) from exc
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    if validated < minimum or validated > maximum:
+        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    return validated
+
+
+def _validate_float_range(name: str, value, minimum: float, maximum: float) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    try:
+        validated = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}") from exc
+    if validated < minimum or validated > maximum:
+        raise ValueError(f"{name} must be between {minimum} and {maximum}")
+    return validated
+
+
 class ConfigManager:
     """Manages MEMANTO CLI configuration.
 
@@ -350,12 +378,20 @@ class ConfigManager:
         if model is not None:
             answer["model"] = model
         if temperature is not None:
-            answer["temperature"] = temperature
+            answer["temperature"] = _validate_float_range(
+                "temperature", temperature, 0.0, 2.0
+            )
         if answer_limit is not None:
-            answer["answer_limit"] = answer_limit
+            answer["answer_limit"] = _validate_int_range(
+                "answer_limit", answer_limit, 1, 50
+            )
         if threshold is not None:
-            answer["threshold"] = threshold
+            answer["threshold"] = _validate_float_range(
+                "threshold", threshold, 0.0, 1.0
+            )
         if kiosk_mode is not None:
+            if not isinstance(kiosk_mode, bool):
+                raise ValueError("kiosk_mode must be a boolean")
             answer["kiosk_mode"] = bool(kiosk_mode)
 
         self.save_yaml(data)

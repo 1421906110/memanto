@@ -154,15 +154,16 @@ async def update_ui_config(updates: dict):
         if _config_manager.get_backend() == Backend.ON_PREM:
             _update_onprem_answer(ans)
         else:
-            _config_manager.set_answer_config(
-                model=ans.get("model"),
-                temperature=float(ans["temperature"]) if "temperature" in ans else None,
-                answer_limit=int(ans["answer_limit"])
-                if "answer_limit" in ans
-                else None,
-                threshold=float(ans["threshold"]) if "threshold" in ans else None,
-                kiosk_mode=bool(ans["kiosk_mode"]) if "kiosk_mode" in ans else None,
-            )
+            try:
+                _config_manager.set_answer_config(
+                    model=ans.get("model"),
+                    temperature=ans.get("temperature"),
+                    answer_limit=ans.get("answer_limit"),
+                    threshold=ans.get("threshold"),
+                    kiosk_mode=ans.get("kiosk_mode") if "kiosk_mode" in ans else None,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if "recall" in updates and isinstance(updates["recall"], dict):
         rec = updates["recall"]

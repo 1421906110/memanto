@@ -1210,6 +1210,53 @@ class TestCWE200ApiKeyLeak:
         assert data["has_active_session"] is True
 
     @pytest.mark.asyncio
+    async def test_config_update_rejects_invalid_answer_config(
+        self, client, _mock_ui_config_manager
+    ):
+        _mock_ui_config_manager.set_answer_config.side_effect = ValueError(
+            "temperature must be between 0.0 and 2.0"
+        )
+
+        response = await client.patch(
+            "/api/ui/config", json={"answer": {"temperature": 3}}
+        )
+
+        assert response.status_code == 400
+        assert "temperature" in response.json()["detail"]
+        _mock_ui_config_manager.set_answer_config.assert_called_once_with(
+            model=None,
+            temperature=3,
+            answer_limit=None,
+            threshold=None,
+            kiosk_mode=None,
+        )
+
+    @pytest.mark.asyncio
+    async def test_config_update_passes_answer_values_to_validated_setter(
+        self, client, _mock_ui_config_manager
+    ):
+        response = await client.patch(
+            "/api/ui/config",
+            json={
+                "answer": {
+                    "temperature": "0.2",
+                    "answer_limit": "20",
+                    "threshold": "0.4",
+                    "kiosk_mode": False,
+                }
+            },
+        )
+
+        assert response.status_code == 200
+        _mock_ui_config_manager.set_answer_config.assert_called_once_with(
+            model=None,
+            temperature="0.2",
+            answer_limit="20",
+            threshold="0.4",
+            kiosk_mode=False,
+        )
+
+    @pytest.mark.asyncio
     async def test_traversal_filename_is_sanitized(
         self, client, auth_headers, mock_moorcheh
     ):

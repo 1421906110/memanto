@@ -125,11 +125,10 @@ async def update_ui_config(updates: dict):
         _config_manager.set_schedule_time(updates["schedule_time"])
 
     if "session" in updates and isinstance(updates["session"], dict):
-        data = _config_manager.load_yaml()
-        if "session" not in data:
-            data["session"] = {}
-        data["session"].update(updates["session"])
-        _config_manager.save_yaml(data)
+        try:
+            _config_manager.set_session_config(updates["session"])
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if "cli" in updates and isinstance(updates["cli"], dict):
         data = _config_manager.load_yaml()

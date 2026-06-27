@@ -29,6 +29,50 @@ def _normalize_duplicated_api_key(key: str) -> str:
     return key
 
 
+_SESSION_CONFIG_LIMITS = {
+    "default_duration_hours": (1, 168),
+    "extend_threshold_minutes": (1, 1440),
+    "warn_before_expiry_minutes": (1, 1440),
+    "auto_renew_interval_hours": (1, 168),
+}
+_SESSION_CONFIG_BOOLEANS = {"auto_extend", "auto_renew_enabled"}
+
+
+def _validate_positive_int_config(name: str, value, minimum: int, maximum: int) -> int:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    try:
+        validated = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{name} must be an integer between {minimum} and {maximum}"
+        ) from exc
+    if isinstance(value, float) and not value.is_integer():
+        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    if validated < minimum or validated > maximum:
+        raise ValueError(f"{name} must be an integer between {minimum} and {maximum}")
+    return validated
+
+
+def _validate_session_config(updates: dict) -> dict:
+    """Validate user-editable session config updates."""
+    allowed = set(_SESSION_CONFIG_LIMITS) | _SESSION_CONFIG_BOOLEANS
+    rejected = set(updates) - allowed
+    if rejected:
+        raise ValueError(f"unknown session config keys: {', '.join(sorted(rejected))}")
+
+    validated = {}
+    for key, value in updates.items():
+        if key in _SESSION_CONFIG_LIMITS:
+            minimum, maximum = _SESSION_CONFIG_LIMITS[key]
+            validated[key] = _validate_positive_int_config(key, value, minimum, maximum)
+        elif key in _SESSION_CONFIG_BOOLEANS:
+            if not isinstance(value, bool):
+                raise ValueError(f"{key} must be a boolean")
+            validated[key] = value
+    return validated
+
+
 class ConfigManager:
     """Manages MEMANTO CLI configuration.
 
@@ -358,6 +402,13 @@ class ConfigManager:
         if kiosk_mode is not None:
             answer["kiosk_mode"] = bool(kiosk_mode)
 
+        self.save_yaml(data)
+
+    def set_session_config(self, updates: dict) -> None:
+        """Set validated session config values."""
+        data = self.load_yaml()
+        session = data.setdefault("session", {})
+        session.update(_validate_session_config(updates))
         self.save_yaml(data)
 
     def get_recall_config(self) -> dict:

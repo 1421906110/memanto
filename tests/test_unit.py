@@ -391,5 +391,46 @@ class TestMEMANTOArchitecture:
         print("   ✅ NO tenant_id in token!")
 
 
+class TestSessionConfigValidation:
+    """Regression tests for user-editable session config."""
+
+    def test_set_session_config_normalizes_integer_fields(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_session_config(
+            {
+                "default_duration_hours": "12",
+                "extend_threshold_minutes": "45",
+                "auto_renew_enabled": False,
+            }
+        )
+
+        session = manager.get_session_config()
+        assert session["default_duration_hours"] == 12
+        assert session["extend_threshold_minutes"] == 45
+        assert session["auto_renew_enabled"] is False
+
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [
+            ("default_duration_hours", 0),
+            ("default_duration_hours", 169),
+            ("extend_threshold_minutes", "abc"),
+            ("warn_before_expiry_minutes", 1.5),
+            ("auto_renew_interval_hours", True),
+            ("auto_extend", "false"),
+            ("unexpected", 1),
+        ],
+    )
+    def test_set_session_config_rejects_invalid_values(self, tmp_path, key, value):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+
+        with pytest.raises(ValueError):
+            manager.set_session_config({key: value})
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])

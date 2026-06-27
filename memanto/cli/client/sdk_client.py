@@ -1231,6 +1231,7 @@ class SdkClient:
 
         write_service = self._get_write_service()
         result_details: dict[str, Any] = {"action": action}
+        delete_failures: list[str] = []
 
         if action == "keep_old":
             if new_id:
@@ -1238,7 +1239,7 @@ class SdkClient:
                     write_service.delete_memory(new_id, namespace)
                     result_details["deleted"] = new_id
                 except Exception as e:
-                    result_details["warning"] = f"Could not delete new memory: {e}"
+                    delete_failures.append(f"new memory {new_id}: {e}")
 
         elif action == "keep_new":
             if old_id:
@@ -1246,7 +1247,7 @@ class SdkClient:
                     write_service.delete_memory(old_id, namespace)
                     result_details["deleted"] = old_id
                 except Exception as e:
-                    result_details["warning"] = f"Could not delete old memory: {e}"
+                    delete_failures.append(f"old memory {old_id}: {e}")
 
         elif action == "keep_both":
             result_details["note"] = "Both memories kept as-is"
@@ -1258,9 +1259,7 @@ class SdkClient:
                         write_service.delete_memory(mem_id, namespace)
                         result_details[f"deleted_{label}"] = mem_id
                     except Exception as e:
-                        result_details[f"warning_{label}"] = (
-                            f"Could not delete {label} memory: {e}"
-                        )
+                        delete_failures.append(f"{label} memory {mem_id}: {e}")
 
         elif action == "manual":
             if not manual_content:
@@ -1273,9 +1272,14 @@ class SdkClient:
                         write_service.delete_memory(mem_id, namespace)
                         result_details[f"deleted_{label}"] = mem_id
                     except Exception as e:
-                        result_details[f"warning_{label}"] = (
-                            f"Could not delete {label} memory: {e}"
-                        )
+                        delete_failures.append(f"{label} memory {mem_id}: {e}")
+
+            if delete_failures:
+                failures = "; ".join(delete_failures)
+                raise ValueError(
+                    "Could not resolve conflict because required memory deletion "
+                    f"failed: {failures}"
+                )
 
             # Store the manual replacement
             mem_type = manual_type or conflict.get("type", "fact")
@@ -1305,6 +1309,13 @@ class SdkClient:
             )
             store_result = write_service.store_memory(memory)
             result_details["new_memory_id"] = store_result.get("id")
+
+        if delete_failures:
+            failures = "; ".join(delete_failures)
+            raise ValueError(
+                "Could not resolve conflict because required memory deletion "
+                f"failed: {failures}"
+            )
 
         # Mark conflict as resolved in the JSON file
         all_conflicts[conflict_index]["resolved"] = True

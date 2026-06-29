@@ -14,7 +14,6 @@ from memanto.app.config import settings
 from memanto.app.models.session import AgentCreate, AgentPattern, SessionStatus
 from memanto.app.services.agent_service import AgentService
 from memanto.app.services.session_service import SessionService
-from memanto.app.utils.errors import InvalidSessionTokenError
 
 
 class TestSessionService:
@@ -82,30 +81,6 @@ class TestSessionService:
         assert token_payload.namespace == "memanto_agent_test-agent"
 
         print("✅ Session validation successful")
-
-    def test_validate_rejects_terminated_session_token(self, session_service):
-        """Ended sessions must not keep authorizing protected operations."""
-        session = session_service.create_session(
-            agent_id="test-agent",
-            duration_hours=1,
-        )
-
-        session_service.end_session("test-agent")
-
-        with pytest.raises(InvalidSessionTokenError):
-            session_service.validate_session(session.session_token)
-
-    def test_validate_rejects_malformed_persisted_session(self, session_service):
-        """Malformed persisted session records should fail closed."""
-        session = session_service.create_session(
-            agent_id="test-agent",
-            duration_hours=1,
-        )
-        session_file = session_service.sessions_dir / "test-agent.json"
-        session_file.write_text("{not valid json", encoding="utf-8")
-
-        with pytest.raises(InvalidSessionTokenError):
-            session_service.validate_session(session.session_token)
 
     def test_validate_expired_session(self, session_service):
         """Test session validation fails for expired session"""

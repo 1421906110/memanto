@@ -166,27 +166,20 @@ class SessionService:
                 raise SessionExpiredError(
                     f"Session {token.session_id} expired at {token.expires_at}"
                 )
-
             try:
                 session = self.get_session(token.agent_id)
+                if (
+                    not session
+                    or session.session_id != token.session_id
+                    or not session.is_active()
+                ):
+                    raise InvalidSessionTokenError(
+                        f"Session {token.session_id} is no longer active"
+                    )
             except (OSError, json.JSONDecodeError, ValidationError) as exc:
                 raise InvalidSessionTokenError(
                     f"Session {token.session_id} is no longer active"
                 ) from exc
-            if not session:
-                raise InvalidSessionTokenError(
-                    f"Session {token.session_id} is no longer active"
-                )
-
-            if session.session_id != token.session_id:
-                raise InvalidSessionTokenError(
-                    f"Session token {token.session_id} is no longer current"
-                )
-
-            if not session.is_active():
-                raise InvalidSessionTokenError(
-                    f"Session {token.session_id} is {session.status.value}"
-                )
 
             return token
 

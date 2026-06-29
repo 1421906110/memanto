@@ -273,7 +273,7 @@ class ConfigManager:
     # Convenience accessors
 
     def get_server_url(self) -> str:
-        """Get MEMANTO server URL."""
+        """Return the normalized local REST API URL from the server config."""
         server = self.load_yaml().get("server", {})
         host = server.get("url", "localhost")
         port = server.get("port", 8000)

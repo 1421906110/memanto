@@ -40,6 +40,12 @@ from memanto.app.services.conversation_memory_extraction_service import (
 from memanto.app.services.memory_read_service import MemoryReadService
 from memanto.app.services.memory_write_service import MemoryWriteService
 from memanto.app.utils.errors import AuthorizationError, map_error_to_http_exception
+from memanto.app.utils.rate_limiting import (
+    enforce_answer_rate_limit,
+    enforce_delete_rate_limit,
+    enforce_read_rate_limit,
+    enforce_write_rate_limit,
+)
 from memanto.app.utils.validation import CostGuard
 from memanto.cli.client.direct_client import DirectClient
 from memanto.cli.config.manager import ConfigManager
@@ -179,6 +185,7 @@ async def remember(
 
     # Enforce session scope: token must match agent_id
     enforce_session_scope(session, agent_id)
+    enforce_write_rate_limit(agent_id)
 
     try:
         # Initialize memory write service
@@ -255,6 +262,7 @@ async def batch_remember(
     """
     # Enforce session scope: token must match agent_id
     enforce_session_scope(session, agent_id)
+    enforce_write_rate_limit(agent_id)
 
     try:
         # Initialize memory write service
@@ -267,6 +275,8 @@ async def batch_remember(
 
         memory_records = []
         for item in request.memories:
+            # Validate content length for each batch item (same check as single remember)
+            CostGuard.validate_text_length(item.content, "Memory content")
             title = item.title or (
                 item.content[:47] + "..." if len(item.content) > 50 else item.content
             )
@@ -410,6 +420,7 @@ async def extract_memories_from_conversation(
     /batch-remember.
     """
     enforce_session_scope(session, agent_id)
+    enforce_write_rate_limit(agent_id)
 
     try:
         extraction_service = ConversationMemoryExtractionService(client)
@@ -581,6 +592,7 @@ async def delete_memory(
     The session must be for the specified agent_id.
     """
     enforce_session_scope(session, agent_id)
+    enforce_delete_rate_limit(agent_id)
 
     try:
         write_service = MemoryWriteService(client)
@@ -628,6 +640,7 @@ async def recall(
 
     # Enforce session scope
     enforce_session_scope(session, agent_id)
+    enforce_read_rate_limit(agent_id)
 
     recall_cfg = _config_manager.get_recall_config()
     raw_limit = (
@@ -698,6 +711,7 @@ async def answer(
 
     # Enforce session scope
     enforce_session_scope(session, agent_id)
+    enforce_answer_rate_limit(agent_id)
 
     client = get_moorcheh_client()
 
@@ -937,6 +951,7 @@ async def recall_as_of(
     - X-Session-Token: {session_token}
     """
     enforce_session_scope(session, agent_id)
+    enforce_read_rate_limit(agent_id)
 
     # request.limit is None → fetch all (no cap). Cost guard only applies when capped.
     limit = request.limit
@@ -985,6 +1000,7 @@ async def recall_changed_since(
     - X-Session-Token: {session_token}
     """
     enforce_session_scope(session, agent_id)
+    enforce_read_rate_limit(agent_id)
 
     # request.limit is None → fetch all (no cap). Cost guard only applies when capped.
     limit = request.limit
@@ -1034,6 +1050,7 @@ async def recall_recent(
     The session must be for the specified agent_id.
     """
     enforce_session_scope(session, agent_id)
+    enforce_read_rate_limit(agent_id)
 
     # request.limit is None → fetch all (no cap). Cost guard only applies when capped.
     limit = request.limit

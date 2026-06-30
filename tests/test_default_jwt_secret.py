@@ -1,87 +1,60 @@
 """
-Security Test: Default JWT Secret Key
+Regression Test: Default JWT Secret Key
 
-Reproducer for the hardcoded default JWT signing key vulnerability.
-When MEMANTO_SECRET_KEY is not explicitly configured, the server falls
-back to a well-known default, allowing anyone to forge session tokens.
+This test asserts that the default JWT signing key is NEVER used in production.
+Unlike the PoC (docs/bounty_reports/poc_forge_jwt.py), this test validates the
+*absence* of the vulnerability — it will PASS once the bug is fixed and FAIL
+if the default secret creeps back in.
 
 Usage:
     pytest tests/test_default_jwt_secret.py -v
-
-    Or run directly:
-    python tests/test_default_jwt_secret.py
 """
 
-import jwt
-from datetime import datetime, timedelta
+import pytest
+from pathlib import Path
+
+# Anchor to repo root regardless of where pytest is invoked
+REPO_ROOT = Path(__file__).resolve().parent.parent
+CONFIG_PY = REPO_ROOT / "memanto" / "app" / "config.py"
+SERVICE_PY = REPO_ROOT / "memanto" / "app" / "services" / "session_service.py"
 
 DEFAULT_SECRET = "memanto-default-secret-change-in-production"
 
 
-def test_default_secret_can_forge_token():
+def test_default_secret_not_in_source():
     """
-    Verify that the default secret can be used to forge JWT tokens for any agent.
-
-    This demonstrates CWE-798 (Use of Hard-coded Credentials) and
-    CWE-347 (Improper Verification of Cryptographic Signature).
+    Regression: the default secret should NOT appear in config.py or
+    session_service.py.  As soon as the maintainers apply the recommended
+    fix this test will pass; if the value is reintroduced it will fail.
     """
-    forged_agent_id = "forged-agent-001"
-
-    payload = {
-        "agent_id": forged_agent_id,
-        "namespace": f"memanto_agent_{forged_agent_id}",
-        "session_id": "sess_forged_001",
-        "started_at": "2026-06-30T00:00:00",
-        "expires_at": (datetime.utcnow() + timedelta(days=365)).isoformat(),
-    }
-
-    # Sign the forged payload with the publicly-known default secret
-    forged_token = jwt.encode(payload, DEFAULT_SECRET, algorithm="HS256")
-
-    # The server would decode this token successfully
-    decoded = jwt.decode(forged_token, DEFAULT_SECRET, algorithms=["HS256"])
-
-    assert decoded["agent_id"] == forged_agent_id, (
-        f"Expected agent_id={forged_agent_id}, got {decoded['agent_id']}"
-    )
-    assert decoded["namespace"] == f"memanto_agent_{forged_agent_id}", (
-        f"Expected namespace=memanto_agent_{forged_agent_id}, got {decoded['namespace']}"
-    )
-
-    print("✅ PASS: Token forged successfully with default secret key")
-    print(f"   Agent: {decoded['agent_id']}")
-    print(f"   Namespace: {decoded['namespace']}")
-    print(f"   Expires: {decoded['expires_at']}")
-    print(f"   Token: {forged_token[:60]}...")
+    for path, label in [(CONFIG_PY, "config.py"), (SERVICE_PY, "session_service.py")]:
+        assert path.exists(), f"{label} not found at {path}"
+        source = path.read_text()
+        assert DEFAULT_SECRET not in source, (
+            f"{label} still contains the hardcoded default secret "
+            f"({DEFAULT_SECRET!r}).  Remove it and use a configured/provided "
+            f"value instead."
+        )
 
 
-def test_default_secret_value_is_well_known():
+def test_secret_key_loaded_from_env(monkeypatch):
     """
-    Verify that the default secret value is in the public source code
-    and thus accessible to any potential attacker.
+    Verify that the Settings model picks up MEMANTO_SECRET_KEY from the
+    environment and does NOT fall back to the hardcoded default.
     """
-    # Read from config.py
-    with open("memanto/app/config.py") as f:
-        config_source = f.read()
+    import importlib
 
-    # Read from session_service.py
-    with open("memanto/app/services/session_service.py") as f:
-        service_source = f.read()
+    monkeypatch.setenv("MEMANTO_SECRET_KEY", "test-secret-from-env")
 
-    # The default secret appears in both files
-    assert DEFAULT_SECRET in config_source, (
-        "Default secret should be in config.py"
+    # Re-load config so the env var is picked up
+    import memanto.app.config as cfg
+    importlib.reload(cfg)
+
+    assert cfg.settings.MEMANTO_SECRET_KEY == "test-secret-from-env", (
+        "Settings should load MEMANTO_SECRET_KEY from the environment, "
+        "not use a hardcoded default."
     )
-    assert DEFAULT_SECRET in service_source, (
-        "Default secret should be in session_service.py (fallback)"
-    )
-
-    print("✅ PASS: Default secret is present in public source code")
-    print(f"   Found in config.py: {DEFAULT_SECRET in config_source}")
-    print(f"   Found in session_service.py: {DEFAULT_SECRET in service_source}")
 
 
 if __name__ == "__main__":
-    test_default_secret_can_forge_token()
-    test_default_secret_value_is_well_known()
-    print("\n✅ All tests passed!")
+    pytest.main([__file__, "-v"])

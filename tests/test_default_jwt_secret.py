@@ -41,19 +41,27 @@ def test_secret_key_loaded_from_env(monkeypatch):
     """
     Verify that the Settings model picks up MEMANTO_SECRET_KEY from the
     environment and does NOT fall back to the hardcoded default.
+
+    Restores the module state after the assertion so other tests are not
+    affected by the reloaded settings.
     """
     import importlib
 
     monkeypatch.setenv("MEMANTO_SECRET_KEY", "test-secret-from-env")
 
-    # Re-load config so the env var is picked up
     import memanto.app.config as cfg
     importlib.reload(cfg)
 
-    assert cfg.settings.MEMANTO_SECRET_KEY == "test-secret-from-env", (
-        "Settings should load MEMANTO_SECRET_KEY from the environment, "
-        "not use a hardcoded default."
-    )
+    try:
+        assert cfg.settings.MEMANTO_SECRET_KEY == "test-secret-from-env", (
+            "Settings should load MEMANTO_SECRET_KEY from the environment, "
+            "not use a hardcoded default."
+        )
+    finally:
+        # monkeypatch reverts MEMANTO_SECRET_KEY at teardown; reload config
+        # so it reflects the original env state (or the hardcoded default)
+        # rather than the test value.
+        importlib.reload(cfg)
 
 
 if __name__ == "__main__":

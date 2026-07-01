@@ -113,11 +113,11 @@ Do **not** generate the key at import time (`secrets.token_urlsafe(32)` as a mod
 
 ## Related Issues Discovered
 
-1. **Rate Limiter Not Connected** (`memanto/app/utils/rate_limiting.py`): The rate limiter module is fully implemented but **never imported or wired into any API route**. No rate limiting is enforced on any endpoint, enabling brute-force attacks.
+1. **Rate Limiter Not Connected** (`memanto/app/utils/rate_limiting.py`): The rate limiter module is fully implemented but **never imported or wired into any API route**. No rate limiting is enforced on any endpoint, enabling brute-force attacks. → **FIXED: wired to all 6 memory endpoints in this PR.**
 
-2. **Default 1-Hour Memory TTL** (`memanto/app/config.py:141`): `DEFAULT_TTL_SECONDS = 3600` means memories vanish after 1 hour. For a "memory" system this is a critical usability flaw — production users will lose data unless they explicitly override it.
+2. **Default 1-Hour Memory TTL** (`memanto/app/config.py:141`): `DEFAULT_TTL_SECONDS = 3600` means memories vanish after 1 hour. For a "memory" system this is a critical usability flaw — production users will lose data unless they explicitly override it. → **FIXED: changed to 86400 (24 hours).**
 
-3. **Silent Exception Handling** (`memanto/app/config.py:60,76`): Malformed YAML config files are silently ignored with bare `except Exception: pass` blocks, giving zero feedback to users.
+3. **Silent Exception Handling** (`memanto/app/config.py:60,76`): Malformed YAML config files are silently ignored with bare `except Exception: pass` blocks, giving zero feedback to users. → **FIXED: replaced with `logger.warning()`.**
 
 ---
 
@@ -126,7 +126,7 @@ Do **not** generate the key at import time (`secrets.token_urlsafe(32)` as a mod
 ### 4. Validation Bypass in Batch Endpoint
 - **File:** `memanto/app/routes/memory.py:238-313`
 - **Issue:** The `/batch-remember` endpoint accepts up to 100 memories per request but **never calls `CostGuard.validate_text_length()`** on individual items, unlike the single `/remember` endpoint which validates content length (line 178). This allows oversized content to bypass validation entirely by using the batch path.
-- **Fix:** Add `CostGuard.validate_text_length(item.content, "Memory content")` for each item in the batch loop.
+- **Fix:** Add `CostGuard.validate_text_length(item.content, "Memory content")` for each item in the batch loop. → **FIXED in this PR.**
 
 ### 5. Prompt Injection in LLM Summary Generation
 - **File:** `memanto/app/services/daily_analysis_service.py:75-90`
@@ -153,16 +153,14 @@ Do **not** generate the key at import time (`secrets.token_urlsafe(32)` as a mod
   This causes the `/recall/as-of` and `/recall/changed-since` endpoints to crash at runtime when the comparison is triggered.
 - **Fix:** Make `utc_now()` return an aware datetime (remove `.replace(tzinfo=None)`) and change `MemoryRecord` to use `datetime.now(timezone.utc)` instead of `datetime.utcnow()`.
 
-## Files to Fix
+## Fixes Applied in This PR
 
-| File | Issue |
-|------|-------|
-| `memanto/app/config.py:134` | Hardcoded default JWT secret |
-| `memanto/app/services/session_service.py:66-67` | Fallback to hardcoded default |
-| `memanto/app/main.py` | Missing rate limiter middleware integration |
-| `memanto/app/config.py:141` | Default TTL too short for a memory system |
-| `memanto/app/config.py:60,76` | Silent exception swallowing |
-| `memanto/app/routes/memory.py:238-313` | Validation bypass in batch endpoint |
-| `memanto/app/services/daily_analysis_service.py:80` | Prompt injection via f-string interpolation |
-| `memanto/app/utils/temporal_helpers.py:12-13` | Naive datetime returned (crash risk) |
-| `memanto/app/core.py:46-47` | Naive datetime in MemoryRecord (crash risk) |
+| # | Issue | File(s) | Status |
+|---|-------|---------|--------|
+| 1 | Hardcoded default JWT secret | `config.py`, `session_service.py` | ✅ Runtime check + warning |
+| 2 | Rate limiter not wired | `routes/memory.py` (6 endpoints) | ✅ Wired |
+| 3 | Default TTL too short (1h) | `config.py` | ✅ Changed to 24h (86400s) |
+| 4 | Silent exception swallowing | `config.py` | ✅ `logger.warning()` replaces bare except |
+| 5 | Batch validation bypass | `routes/memory.py` | ✅ `CostGuard.validate_text_length()` |
+| 6 | Prompt injection in summary | `daily_analysis_service.py` | ✅ Data boundary marker added |
+| 7 | Naive/aware datetime crash | `temporal_helpers.py`, `core.py`, `memory_write_service.py` | ✅ All aware datetime now |

@@ -65,6 +65,11 @@ class SessionService:
             or os.getenv("MEMANTO_SECRET_KEY")
             or ""
         )
+        if not resolved_secret_key or len(resolved_secret_key) < 16:
+            logger.warning(
+                "MEMANTO_SECRET_KEY is not set or too short. "
+                "Generate a unique key with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
         self.secret_key: str = resolved_secret_key
         self.sessions_dir = sessions_dir or get_data_dir() / "sessions"
         self.sessions_dir.mkdir(parents=True, exist_ok=True)

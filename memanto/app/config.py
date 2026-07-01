@@ -11,7 +11,7 @@ from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
 from dotenv import load_dotenv
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -134,25 +134,6 @@ class Settings(BaseSettings):
 
     # Session Configuration
     MEMANTO_SECRET_KEY: str = ""
-    SESSION_DEFAULT_DURATION_HOURS: int = 6
-
-    @field_validator("MEMANTO_SECRET_KEY", mode="after")
-    @classmethod
-    def reject_default_secret(cls, v: str) -> str:
-        """Reject empty or insecure default JWT signing key at startup."""
-        if not v:
-            raise ValueError(
-                "MEMANTO_SECRET_KEY is not set. "
-                "Generate a unique key with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\" "
-                "and set it in your environment or .env file."
-            )
-        if v == "memanto-default-secret-change-in-production":
-            raise ValueError(
-                "MEMANTO_SECRET_KEY is still set to the insecure default. "
-                "Generate a unique key with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\" "
-                "and set it in your environment or .env file."
-            )
-        return v
     SESSION_AUTO_EXTEND: bool = True
     SESSION_EXTEND_THRESHOLD_MINUTES: int = 30
     SESSION_AUTO_RENEW_ENABLED: bool = True

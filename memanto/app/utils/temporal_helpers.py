@@ -9,8 +9,8 @@ from typing import Any
 
 
 def utc_now() -> datetime:
-    """Current UTC time as a naive datetime (matches legacy session storage)."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Current UTC time as an aware datetime (prevents naive/aware comparison crashes)."""
+    return datetime.now(timezone.utc)
 
 
 def parse_iso_timestamp(ts_str: str) -> datetime:

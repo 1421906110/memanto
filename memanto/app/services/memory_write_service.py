@@ -2,7 +2,7 @@
 Memory Write Service
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -33,7 +33,7 @@ class MemoryWriteService:
                 memory.id = generate_memory_id()
 
             # Enforce server-side timestamps (never trust client)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             memory.created_at = now
             memory.updated_at = now
 
@@ -105,7 +105,7 @@ class MemoryWriteService:
             validated_documents = []
 
             # Enforce server-side timestamps for batch (single timestamp for all)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             for memory in memories:
                 try:
@@ -296,7 +296,7 @@ class MemoryWriteService:
                         pass  # Keep default
                 else:
                     updated_memory.created_at = raw_created
-            updated_memory.updated_at = datetime.utcnow()
+            updated_memory.updated_at = datetime.now(timezone.utc)
 
             # Handle TTL
             if "ttl_seconds" in updates:

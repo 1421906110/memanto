@@ -5,13 +5,16 @@ Server-side settings (loaded from .env via pydantic-settings).
 CLI config models have been moved to cli/config/manager.py.
 """
 
+import logging
 import os
 from pathlib import Path
 
 import yaml  # type: ignore[import-untyped]
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 # Load project .env first, then ~/.memanto/.env for the API key
 load_dotenv()
@@ -57,8 +60,8 @@ if _config_file.exists():
             _backend = _memanto.get("backend")
             if _backend:
                 os.environ["MEMANTO_BACKEND"] = str(_backend)
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.warning("Failed to load ~/.memanto/config.yaml: %s", _exc)
 
     # On-prem URL lives in ~/.memanto/on-prem/state.json so on-prem onboarding
     # never has to touch the shared cloud yaml.
@@ -74,8 +77,8 @@ if _config_file.exists():
             _op_embed = _state.get("embedding_provider")
             if _op_embed:
                 os.environ["MOORCHEH_ONPREM_EMBEDDING_PROVIDER"] = str(_op_embed)
-    except Exception:
-        pass
+    except Exception as _exc:
+        logger.warning("Failed to load ~/.memanto/on-prem/state.json: %s", _exc)
 
 
 # CLI & YAML Format Models (kept for backward compat with config.yaml structure)
@@ -130,15 +133,33 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: list[str] = ["*"]
 
     # Session Configuration
-    MEMANTO_SECRET_KEY: str = "memanto-default-secret-change-in-production"
+    MEMANTO_SECRET_KEY: str = ""
     SESSION_DEFAULT_DURATION_HOURS: int = 6
+
+    @field_validator("MEMANTO_SECRET_KEY", mode="after")
+    @classmethod
+    def reject_default_secret(cls, v: str) -> str:
+        """Reject empty or insecure default JWT signing key at startup."""
+        if not v:
+            raise ValueError(
+                "MEMANTO_SECRET_KEY is not set. "
+                "Generate a unique key with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\" "
+                "and set it in your environment or .env file."
+            )
+        if v == "memanto-default-secret-change-in-production":
+            raise ValueError(
+                "MEMANTO_SECRET_KEY is still set to the insecure default. "
+                "Generate a unique key with: python3 -c \"import secrets; print(secrets.token_urlsafe(32))\" "
+                "and set it in your environment or .env file."
+            )
+        return v
     SESSION_AUTO_EXTEND: bool = True
     SESSION_EXTEND_THRESHOLD_MINUTES: int = 30
     SESSION_AUTO_RENEW_ENABLED: bool = True
     SESSION_AUTO_RENEW_INTERVAL_HOURS: int = 6
 
     # Memory Configuration
-    DEFAULT_TTL_SECONDS: int = 3600  # 1 hour
+    DEFAULT_TTL_SECONDS: int = 86400  # 24 hours (was 3600 — too short for a memory system)
 
     # Answer Configuration
     ANSWER_MODEL: str = "anthropic.claude-sonnet-4-6"

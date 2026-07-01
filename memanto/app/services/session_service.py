@@ -63,7 +63,7 @@ class SessionService:
         resolved_secret_key = (
             secret_key
             or os.getenv("MEMANTO_SECRET_KEY")
-            or "memanto-default-secret-change-in-production"
+            or ""
         )
         self.secret_key: str = resolved_secret_key
         self.sessions_dir = sessions_dir or get_data_dir() / "sessions"

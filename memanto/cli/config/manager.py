@@ -259,6 +259,21 @@ class ConfigManager:
         except OSError:
             pass
 
+    @staticmethod
+    def _dict_section(data: dict, key: str, *, repair: bool = False) -> dict:
+        """Return a dict section.
+
+        When repair is true, malformed or missing sections are replaced in
+        ``data`` so callers can populate them before saving.
+        """
+        section = data.get(key)
+        if isinstance(section, dict):
+            return section
+        if repair:
+            data[key] = {}
+            return data[key]
+        return {}
+
     def get(self, key: str, default=None):
         """Get a top-level YAML config value."""
         return self.load_yaml().get(key, default)
@@ -273,7 +288,7 @@ class ConfigManager:
 
     def get_server_url(self) -> str:
         """Get MEMANTO server URL."""
-        server = self.load_yaml().get("server", {})
+        server = self._dict_section(self.load_yaml(), "server")
         host = server.get("url", "localhost")
         port = server.get("port", 8000)
         return f"http://{host}:{port}"
@@ -281,7 +296,7 @@ class ConfigManager:
     def get_server_config(self) -> dict:
         """Get server config dict with defaults."""
         defaults = {"url": "localhost", "port": 8000, "auto_start": False}
-        defaults.update(self.load_yaml().get("server", {}))
+        defaults.update(self._dict_section(self.load_yaml(), "server"))
         return defaults
 
     def get_session_config(self) -> dict:
@@ -294,7 +309,7 @@ class ConfigManager:
             "auto_renew_enabled": True,
             "auto_renew_interval_hours": 6,
         }
-        defaults.update(self.load_yaml().get("session", {}))
+        defaults.update(self._dict_section(self.load_yaml(), "session"))
         return defaults
 
     def get_cli_config(self) -> dict:
@@ -305,7 +320,7 @@ class ConfigManager:
             "auto_title": True,
             "color_output": True,
         }
-        defaults.update(self.load_yaml().get("cli", {}))
+        defaults.update(self._dict_section(self.load_yaml(), "cli"))
         return defaults
 
     def get_answer_config(self) -> dict:
@@ -318,7 +333,7 @@ class ConfigManager:
         because they describe how to query, not which provider to hit.
         """
         data = self.load_yaml()
-        answer = data.get("answer", {})
+        answer = self._dict_section(data, "answer")
 
         defaults = {
             "model": "anthropic.claude-sonnet-4-6",
@@ -346,7 +361,7 @@ class ConfigManager:
     ) -> None:
         """Set Answer config values."""
         data = self.load_yaml()
-        answer = data.setdefault("answer", {})
+        answer = self._dict_section(data, "answer", repair=True)
         if model is not None:
             answer["model"] = model
         if temperature is not None:
@@ -363,7 +378,7 @@ class ConfigManager:
     def get_recall_config(self) -> dict:
         """Get Recall/Top-N config dict with defaults."""
         data = self.load_yaml()
-        recall = data.get("recall", {})
+        recall = self._dict_section(data, "recall")
 
         defaults = {"limit": 10, "min_similarity": 0.0}
         defaults.update(recall)
@@ -374,7 +389,7 @@ class ConfigManager:
     ) -> None:
         """Set Recall config values."""
         data = self.load_yaml()
-        recall = data.setdefault("recall", {})
+        recall = self._dict_section(data, "recall", repair=True)
         if limit is not None:
             recall["limit"] = limit
         if min_similarity is not None:
@@ -420,19 +435,17 @@ class ConfigManager:
     def set_server_config(self, url: str, port: int) -> None:
         """Set fallback server configuration."""
         data = self.load_yaml()
-        if "server" not in data:
-            data["server"] = {}
-        data["server"]["url"] = url
-        data["server"]["port"] = port
+        server = self._dict_section(data, "server", repair=True)
+        server["url"] = url
+        server["port"] = port
         self.save_yaml(data)
 
     def set_cli_config(self, interactive_mode: bool, smart_parse: bool) -> None:
         """Set fallback CLI configuration."""
         data = self.load_yaml()
-        if "cli" not in data:
-            data["cli"] = {}
-        data["cli"]["interactive_mode"] = interactive_mode
-        data["cli"]["smart_parse"] = smart_parse
+        cli = self._dict_section(data, "cli", repair=True)
+        cli["interactive_mode"] = interactive_mode
+        cli["smart_parse"] = smart_parse
         self.save_yaml(data)
 
     # Connections registry — tracks which agents have memanto installed where.

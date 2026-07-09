@@ -155,6 +155,7 @@ class TestSessionService:
     def test_get_active_session_ignores_invalid_session_file(self, session_service):
         """A corrupt active session file should not crash status checks."""
         active_marker = session_service.sessions_dir / "active"
+        active_marker.parent.mkdir(parents=True, exist_ok=True)
         active_marker.write_text("broken-agent")
         (session_service.sessions_dir / "broken-agent.json").write_text("{")
 
@@ -294,6 +295,29 @@ class TestAgentService:
         assert not agent_service.agent_exists("test-agent")
 
         print("✅ Agent deleted successfully")
+
+
+def test_local_services_do_not_create_storage_on_init(tmp_path, monkeypatch):
+    """Constructing local helpers should not write to disk until they save state."""
+    from memanto.cli.config.manager import ConfigManager
+
+    monkeypatch.delenv("MEMANTO_SECRET_KEY", raising=False)
+    monkeypatch.setattr(settings, "MEMANTO_SECRET_KEY", "")
+
+    config_dir = tmp_path / "config"
+    agents_dir = tmp_path / "agents"
+    sessions_dir = tmp_path / "sessions"
+
+    ConfigManager(config_dir=config_dir)
+    agent_service = AgentService(agents_dir=agents_dir)
+    session_service = SessionService(sessions_dir=sessions_dir)
+
+    assert not config_dir.exists()
+    assert not agents_dir.exists()
+    assert not sessions_dir.exists()
+    assert not (tmp_path / "secret_key").exists()
+    assert agent_service.list_agents().count == 0
+    assert session_service._generate_namespace("test-agent") == "memanto_agent_test-agent"
 
 
 class TestMemoryWriteServiceDelete:
@@ -482,11 +506,14 @@ class TestMEMANTOArchitecture:
         print(f"✅ V2 namespace format confirmed: {namespace}")
         print("   ✅ NO tenant_id required!")
 
-    def test_jwt_token_structure(self):
+    def test_jwt_token_structure(self, tmp_path):
         """Verify JWT token contains correct fields"""
         from memanto.app.services.session_service import SessionService
 
-        service = SessionService(secret_key="test-secret-min-32-bytes-abcdefg")
+        service = SessionService(
+            secret_key="test-secret-min-32-bytes-abcdefg",
+            sessions_dir=tmp_path / "sessions",
+        )
         session = service.create_session(agent_id="test-agent", duration_hours=4)
 
         # Decode token (without verification, just to check structure)

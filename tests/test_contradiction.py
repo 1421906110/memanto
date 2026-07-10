@@ -1,61 +1,165 @@
-import pytest
 from unittest.mock import MagicMock
-from memanto.app.services.memory_write_service import MemoryWriteService
+
 from memanto.app.core import MemoryRecord
+from memanto.app.services.memory_write_service import MemoryWriteService
+
+
+def make_memory(**overrides):
+    defaults = dict(
+        content="The user's favorite color is red.",
+        type="fact",
+        title="Favorite Color",
+        agent_id="test-agent",
+        actor_id="user",
+        source="user",
+    )
+    defaults.update(overrides)
+    return MemoryRecord(**defaults)
+
+
+def make_client(search_results=None):
+    client = MagicMock()
+    client.documents.upload.return_value = {"status": "success"}
+    client.documents.delete.return_value = {"actual_deletions": 1}
+    client.similarity_search.query.return_value = {"results": search_results or []}
+    return client
+
+
+def existing_doc(
+    memory_id="old-1",
+    title="Favorite Color",
+    content="The user's favorite color is blue.",
+    memory_type="fact",
+    status="active",
+):
+    """A stored memory as Moorcheh returns it (flat metadata fields)."""
+    return {
+        "id": memory_id,
+        "text": f"[{memory_type.upper()}] {title}\n\n{content}",
+        "memory_type": memory_type,
+        "status": status,
+        "agent_id": "test-agent",
+        "actor_id": "user",
+        "source": "user",
+        "confidence": 0.8,
+        "created_at": "2026-01-01T00:00:00",
+        "updated_at": "2026-01-01T00:00:00",
+    }
+
 
 class TestContradictionHandling:
-    """
-    Test suite demonstrating that the memory write service fails to properly resolve direct contradictions.
-    """
+    """Write-time contradiction validation in MemoryWriteService."""
 
-    def test_store_memory_skips_validation(self):
-        """
-        Demonstrates that store_memory bypasses contradiction validation and forces an MVP direct store.
-        This allows logically contradictory memories to be stored blindly.
-        """
-        mock_client = MagicMock()
-        mock_client.documents.upload.return_value = {"status": "success"}
-        
-        write_service = MemoryWriteService(mock_client)
-        
-        memory = MemoryRecord(
-            content="The user's favorite color is red.",
-            type="fact",
-            title="Favorite Color",
-            agent_id="test-agent"
+    def test_store_memory_runs_validation(self):
+        """store_memory must not blindly bypass validation (old 'MVP direct store')."""
+        write_service = MemoryWriteService(make_client())
+
+        result = write_service.store_memory(make_memory())
+
+        assert result.get("reason") != "MVP direct store", (
+            "Contradiction validation is completely skipped (MVP direct store)."
         )
-        
+        assert result["reason"] == "validated: no contradicting memories found"
+        assert result["action"] == "store"
+
+    def test_store_memory_supersedes_contradicting_memory(self):
+        """A same-type/same-title active memory with different content is
+        superseded (keep_new) and the resolution is reported."""
+        client = make_client(search_results=[existing_doc()])
+        write_service = MemoryWriteService(client)
+
+        memory = make_memory()
         result = write_service.store_memory(memory)
-        
-        # The test expects proper contradiction validation to be active.
-        # Currently, the code skips validation with the reason "MVP direct store", meaning
-        # it will blindly store contradictions instead of resolving them.
-        assert result.get("reason") != "MVP direct store", "Contradiction validation is completely skipped (MVP direct store)."
 
-    def test_batch_store_memories_skips_validation(self):
-        """
-        Demonstrates that batch_store_memories also bypasses contradiction validation.
-        """
-        mock_client = MagicMock()
-        mock_client.documents.upload.return_value = {"status": "success"}
-        
-        write_service = MemoryWriteService(mock_client)
-        
-        memory1 = MemoryRecord(
-            content="The user lives in New York.",
-            type="fact",
-            title="Location",
-            agent_id="test-agent"
+        assert result["superseded_ids"] == ["old-1"]
+        assert "contradiction resolved: superseded old-1" in result["reason"]
+
+        # Old memory was rewritten as superseded history, not dropped.
+        client.documents.delete.assert_called_once_with(
+            namespace_name="memanto_agent_test-agent", ids=["old-1"]
         )
-        
-        memory2 = MemoryRecord(
-            content="The user lives in London.",
-            type="fact",
-            title="Location",
-            agent_id="test-agent"
+        uploads = client.documents.upload.call_args_list
+        assert len(uploads) == 2
+        superseded_doc = uploads[0].kwargs["documents"][0]
+        assert superseded_doc["id"] == "old-1"
+        assert superseded_doc["status"] == "superseded"
+        assert superseded_doc["superseded_by"] == memory.id
+        assert "superseded_at" in superseded_doc
+        new_doc = uploads[1].kwargs["documents"][0]
+        assert new_doc["id"] == memory.id
+        assert new_doc["status"] == "active"
+
+    def test_duplicate_content_is_not_a_contradiction(self):
+        """Identical content under the same title is a duplicate, not a conflict."""
+        duplicate = existing_doc(content="The user's favorite color is red.")
+        client = make_client(search_results=[duplicate])
+        write_service = MemoryWriteService(client)
+
+        result = write_service.store_memory(make_memory())
+
+        assert result["reason"] == "validated: no contradicting memories found"
+        client.documents.delete.assert_not_called()
+
+    def test_exempt_type_skips_conflict_check(self):
+        """Types outside REQUIRE_VALIDATION_FOR store directly, without search."""
+        client = make_client()
+        write_service = MemoryWriteService(client)
+
+        result = write_service.store_memory(
+            make_memory(type="event", title="Standup", content="Daily standup at 9am.")
         )
-        
+
+        assert "exempt from conflict validation" in result["reason"]
+        client.similarity_search.query.assert_not_called()
+
+    def test_search_failure_does_not_block_store(self):
+        """A failed conflict lookup is reported honestly but never blocks the write."""
+        client = make_client()
+        client.similarity_search.query.side_effect = RuntimeError("search down")
+        write_service = MemoryWriteService(client)
+
+        result = write_service.store_memory(make_memory())
+
+        assert result["reason"] == "stored: conflict check unavailable"
+        client.documents.upload.assert_called_once()
+
+    def test_batch_store_memories_runs_validation(self):
+        """batch_store_memories must not bypass validation either."""
+        client = make_client()
+        write_service = MemoryWriteService(client)
+
+        memory1 = make_memory(
+            content="The user lives in New York.", title="Location"
+        )
+        memory2 = make_memory(content="The user lives in London.", title="Location")
+
         result = write_service.batch_store_memories([memory1, memory2])
-        
+
         for res in result["results"]:
-            assert res.get("reason") != "MVP direct store", "Contradiction validation is skipped for batch storage (MVP direct store)."
+            assert res.get("reason") != "MVP direct store", (
+                "Contradiction validation is skipped for batch storage (MVP direct store)."
+            )
+
+    def test_batch_resolves_contradictions_within_batch(self):
+        """Contradicting memories submitted together resolve to last-wins,
+        with the earlier one preserved as superseded history."""
+        client = make_client()
+        write_service = MemoryWriteService(client)
+
+        memory1 = make_memory(
+            content="The user lives in New York.", title="Location"
+        )
+        memory2 = make_memory(content="The user lives in London.", title="Location")
+
+        result = write_service.batch_store_memories([memory1, memory2])
+
+        first, second = result["results"]
+        assert first["action"] == "store_superseded"
+        assert f"superseded within batch by {memory2.id}" in first["reason"]
+        assert second["action"] == "store"
+
+        documents = client.documents.upload.call_args.kwargs["documents"]
+        assert documents[0]["status"] == "superseded"
+        assert documents[0]["superseded_by"] == memory2.id
+        assert documents[1]["status"] == "active"
+        assert result["successful"] == 2

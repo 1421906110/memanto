@@ -251,7 +251,7 @@ When these four findings are chained, the overall impact exceeds any single find
 | Criterion | Max | Claim | Justification |
 |-----------|-----|-------|---------------|
 | Severity & Impact | 60 | **50** | Systemic integrity failure affecting all memory operations. Not a single edge case. |
-| Reproducibility & Cleanliness | 25 | **22** | Each finding has a minimal reproduction in `tests/failing_tests/`. Scripts require a running Moorcheh backend. |
+| Reproducibility & Cleanliness | 25 | **25** | Each finding has a minimal reproduction in `tests/failing_tests/`. Tests use mocks — no backend required, runs in CI via `pytest`. |
 | Social Amplification | 15 | — | To be assessed by maintainers based on public engagement. |
 | **Total** | **100** | **72+** | |
 
@@ -292,4 +292,8 @@ When these four findings are chained, the overall impact exceeds any single find
 
 ## Reproduction Scripts
 
-See `tests/failing_tests/test_memory_integrity_chain.py` for automated reproduction of each finding.
+See `tests/failing_tests/test_memory_integrity_chain.py` for automated reproduction of each finding. Tests use pytest with mocked dependencies — no live Moorcheh backend required:
+
+```bash
+pytest tests/failing_tests/test_memory_integrity_chain.py -v
+```

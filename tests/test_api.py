@@ -1856,6 +1856,20 @@ class TestCWE200ApiKeyLeak:
         assert data["has_active_session"] is True
 
     @pytest.mark.asyncio
+    async def test_config_update_rejects_invalid_schedule_time(
+        self, client, _mock_ui_config_manager
+    ):
+        """Invalid UI schedule updates should be reported as client errors."""
+        _mock_ui_config_manager.set_schedule_time.side_effect = ValueError(
+            "schedule_time must be in HH:MM 24-hour format (00:00-23:59)"
+        )
+
+        resp = await client.patch("/api/ui/config", json={"schedule_time": "25:61"})
+
+        assert resp.status_code == 400
+        assert "HH:MM" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
     async def test_daily_summary_rejects_traversal_agent_id(
         self, client, tmp_path, _mock_ui_config_manager
     ):

@@ -1167,6 +1167,48 @@ class TestSessionConfigValidation:
         assert manager.load_yaml()["session"] == "bad"
 
 
+class TestAnswerConfigValidation:
+    """Regression tests for user-editable answer config."""
+
+    def test_set_answer_config_normalizes_numeric_values(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_answer_config(
+            temperature="0.2",
+            answer_limit="20",
+            threshold="0.4",
+            kiosk_mode=True,
+        )
+
+        answer = manager.get_answer_config()
+        assert answer["temperature"] == 0.2
+        assert answer["answer_limit"] == 20
+        assert answer["threshold"] == 0.4
+        assert answer["kiosk_mode"] is True
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("temperature", -0.1),
+            ("temperature", 2.1),
+            ("answer_limit", 0),
+            ("answer_limit", 51),
+            ("answer_limit", 1.5),
+            ("threshold", -0.1),
+            ("threshold", 1.1),
+            ("kiosk_mode", "false"),
+        ],
+    )
+    def test_set_answer_config_rejects_invalid_values(self, tmp_path, field, value):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+
+        with pytest.raises(ValueError, match=field):
+            manager.set_answer_config(**{field: value})
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
 

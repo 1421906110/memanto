@@ -53,7 +53,7 @@ class MoorchehClientSingleton:
         """
         backend = self._backend()
         if backend == Backend.ON_PREM:
-            client_config = (
+            client_config: tuple[Any, ...] = (
                 backend,
                 settings.MOORCHEH_ONPREM_URL,
                 settings.MOORCHEH_ONPREM_TIMEOUT,
@@ -82,7 +82,7 @@ class MoorchehClientSingleton:
         """Get or create the active async Moorcheh client."""
         backend = self._backend()
         if backend == Backend.ON_PREM:
-            client_config = (
+            client_config: tuple[Any, ...] = (
                 backend,
                 settings.MOORCHEH_ONPREM_URL,
                 settings.MOORCHEH_ONPREM_TIMEOUT,

@@ -85,6 +85,36 @@ class TestContradictionHandling:
 
         assert [item["id"] for item in conflicts] == ["old-1"]
 
+    def test_prefetch_contradictions_runs_parallel_lookups(self, monkeypatch):
+        """Batch prefetch should not serialize independent contradiction searches."""
+        import time
+
+        active = []
+
+        def slow_find(_self, memory):
+            active.append(memory.id)
+            time.sleep(0.05)
+            assert len(active) <= 8
+            active.remove(memory.id)
+            return []
+
+        monkeypatch.setattr(
+            MemoryValidationService,
+            "_find_contradictions",
+            slow_find,
+        )
+        service = MemoryValidationService(make_client())
+        memories = [
+            make_memory(title=f"Topic {i}", content=f"Body {i}") for i in range(4)
+        ]
+
+        start = time.perf_counter()
+        prefetched = service.prefetch_contradictions(memories)
+        elapsed = time.perf_counter() - start
+
+        assert len(prefetched) == 4
+        assert elapsed < 0.15
+
     def test_store_memory_supersedes_contradicting_memory(self):
         """A same-type/same-title active memory with different content is
         superseded (keep_new) and the resolution is reported."""

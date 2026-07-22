@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 from memanto.app.config import settings
 from memanto.app.core import MemoryRecord
 
+_MISSING = object()
+_MAX_VALIDATION_WORKERS = 8
+
 
 class MemoryValidationService:
     """Detect and resolve direct contradictions before persisting a memory.
@@ -37,12 +40,19 @@ class MemoryValidationService:
         self.client = moorcheh_client
 
     def validate_memory(
-        self, memory: MemoryRecord, context: dict[str, Any] | None = None
+        self,
+        memory: MemoryRecord,
+        context: dict[str, Any] | None = None,
+        *,
+        prefetched_conflicts: list[dict[str, Any]] | None | object = _MISSING,
     ) -> dict[str, Any]:
         """Validate a memory against existing records, resolving contradictions.
 
         Returns a dict with at least ``action`` and ``reason``; when
         contradictions were resolved it also carries ``superseded_ids``.
+
+        When ``prefetched_conflicts`` is supplied by batch prefetch, the
+        lookup is skipped. ``None`` means the prefetch lookup failed.
         """
         memory_type = memory.type or "fact"
         if memory_type not in settings.REQUIRE_VALIDATION_FOR:
@@ -51,15 +61,23 @@ class MemoryValidationService:
                 "reason": f"stored: type '{memory_type}' exempt from conflict validation",
             }
 
-        try:
-            conflicts = self._find_contradictions(memory)
-        except Exception:
-            # A failed lookup must never block a write, but say the check did
-            # not run rather than pretending it passed.
+        if prefetched_conflicts is _MISSING:
+            try:
+                conflicts = self._find_contradictions(memory)
+            except Exception:
+                # A failed lookup must never block a write, but say the check did
+                # not run rather than pretending it passed.
+                return {
+                    "action": "store",
+                    "reason": "stored: conflict check unavailable",
+                }
+        elif prefetched_conflicts is None:
             return {
                 "action": "store",
                 "reason": "stored: conflict check unavailable",
             }
+        else:
+            conflicts = cast(list[dict[str, Any]], prefetched_conflicts)
 
         if not conflicts:
             return {
@@ -120,6 +138,39 @@ class MemoryValidationService:
             latest_by_key[key] = memory
 
         return superseded
+
+    def prefetch_contradictions(
+        self, memories: list[MemoryRecord]
+    ) -> dict[str, list[dict[str, Any]] | None]:
+        """Run contradiction lookups in parallel for batch writes.
+
+        Returns a mapping of memory id -> conflicts list, or ``None`` when
+        that memory's lookup failed. Exempt types are omitted.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        targets = [
+            memory
+            for memory in memories
+            if (memory.type or "fact") in settings.REQUIRE_VALIDATION_FOR
+        ]
+        if not targets:
+            return {}
+
+        def lookup(
+            memory: MemoryRecord,
+        ) -> tuple[str, list[dict[str, Any]] | None]:
+            try:
+                return memory.id, self._find_contradictions(memory)
+            except Exception:
+                return memory.id, None
+
+        workers = min(len(targets), _MAX_VALIDATION_WORKERS)
+        prefetched: dict[str, list[dict[str, Any]] | None] = {}
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            for memory_id, conflicts in executor.map(lookup, targets):
+                prefetched[memory_id] = conflicts
+        return prefetched
 
     def _find_contradictions(self, memory: MemoryRecord) -> list[dict[str, Any]]:
         """Find active memories of the same type/title with different content."""

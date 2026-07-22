@@ -205,6 +205,13 @@ class MemoryWriteService:
                 prepared
             )
 
+            to_validate = [
+                memory for memory in prepared if memory.id not in superseded_in_batch
+            ]
+            prefetched_conflicts = self.validation_service.prefetch_contradictions(
+                to_validate
+            )
+
             for memory in prepared:
                 try:
                     batch_note = superseded_in_batch.get(memory.id)
@@ -213,8 +220,13 @@ class MemoryWriteService:
                             "action": "store_superseded",
                             "reason": f"contradiction resolved: superseded within batch by {batch_note}",
                         }
+                    elif memory.id in prefetched_conflicts:
+                        validation_result = self.validation_service.validate_memory(
+                            memory,
+                            context,
+                            prefetched_conflicts=prefetched_conflicts[memory.id],
+                        )
                     else:
-                        # Validate memory (write-time contradiction resolution)
                         validation_result = self.validation_service.validate_memory(
                             memory, context
                         )

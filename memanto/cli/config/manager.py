@@ -17,6 +17,7 @@ from dotenv import load_dotenv, set_key
 
 from memanto.app.clients.backend import Backend, parse_backend
 from memanto.app.utils.validation import validate_recall_limit
+from memanto.cli.schedule_time import normalize_schedule_time
 
 yaml = importlib.import_module("yaml")
 
@@ -525,7 +526,7 @@ class ConfigManager:
 
     def set_schedule_time(self, time_str: str) -> None:
         """Set daily summary + conflict time."""
-        self.set("schedule_time", time_str)
+        self.set("schedule_time", normalize_schedule_time(time_str))
 
     # Active session tracking — sourced from SessionService (~/.memanto/sessions/).
     # CLI and API server both go through here so they always agree.

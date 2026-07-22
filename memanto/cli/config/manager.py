@@ -124,9 +124,6 @@ class ConfigManager:
         self.env_file = self.config_dir / ".env"
         self.connections_file = self.config_dir / "connections.json"
 
-        # Ensure config directory exists
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-
         # Load env vars from the memanto .env file
         if self.env_file.exists():
             load_dotenv(self.env_file, override=True)
@@ -194,6 +191,7 @@ class ConfigManager:
 
     def _set_env_var(self, name: str, value: str) -> None:
         """Write a single variable to ~/.memanto/.env and update os.environ."""
+        self.config_dir.mkdir(parents=True, exist_ok=True)
         if not self.env_file.exists():
             self.env_file.write_text("# MEMANTO Environment\n")
         set_key(str(self.env_file), name, value)
@@ -333,6 +331,7 @@ class ConfigManager:
 
     def save_yaml(self, data: dict) -> None:
         """Save dict to config.yaml under the 'memanto' key."""
+        self.config_dir.mkdir(parents=True, exist_ok=True)
         with open(self.config_file, "w") as f:
             yaml.dump({"memanto": data}, f, default_flow_style=False, sort_keys=False)
         try:
@@ -579,6 +578,7 @@ class ConfigManager:
 
     def _save_connections(self, data: dict) -> None:
         """Atomically write the connections registry."""
+        self.config_dir.mkdir(parents=True, exist_ok=True)
         tmp = self.connections_file.with_suffix(".json.tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, sort_keys=True)

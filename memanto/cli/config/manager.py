@@ -11,6 +11,7 @@ import importlib
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv, set_key
 
@@ -273,10 +274,24 @@ class ConfigManager:
     # Convenience accessors
 
     def get_server_url(self) -> str:
-        """Get MEMANTO server URL."""
+        """Return the normalized local REST API URL from the server config."""
         server = self.load_yaml().get("server", {})
         host = server.get("url", "localhost")
         port = server.get("port", 8000)
+
+        host = str(host).strip() or "localhost"
+        if host.startswith(("http://", "https://")):
+            parsed = urlsplit(host)
+            netloc = parsed.netloc
+            try:
+                explicit_port = parsed.port
+            except ValueError:
+                explicit_port = None
+                netloc = parsed.hostname or "localhost"
+            if explicit_port is None:
+                netloc = f"{netloc}:{port}"
+            return urlunsplit((parsed.scheme, netloc, parsed.path.rstrip("/"), "", ""))
+
         return f"http://{host}:{port}"
 
     def get_server_config(self) -> dict:

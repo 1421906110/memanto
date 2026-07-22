@@ -1049,6 +1049,51 @@ def test_conflict_report_omits_unset_active_ai_model(tmp_path, monkeypatch):
     assert "ai_model" not in call_kwargs
 
 
+class TestServerConfigUrl:
+    """Regression tests for local REST API URL formatting."""
+
+    def test_server_url_defaults_to_http_for_host_and_port(self, tmp_path):
+        """Ensure host and port configs default to an HTTP URL."""
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config("localhost", 8000)
+
+        assert manager.get_server_url() == "http://localhost:8000"
+
+    def test_server_url_preserves_configured_scheme(self, tmp_path):
+        """Ensure configured HTTP or HTTPS schemes are preserved."""
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config("https://memanto.example", 443)
+
+        assert manager.get_server_url() == "https://memanto.example:443"
+
+    def test_server_url_does_not_duplicate_explicit_url_port(self, tmp_path):
+        """Ensure explicit URL ports are not duplicated."""
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config("https://memanto.example:9443", 443)
+
+        assert manager.get_server_url() == "https://memanto.example:9443"
+
+    @pytest.mark.parametrize(
+        "bad_url", ["http://localhost:abc", "http://localhost:999999"]
+    )
+    def test_server_url_falls_back_when_explicit_url_port_is_malformed(
+        self, tmp_path, bad_url
+    ):
+        """Ensure malformed explicit URL ports fall back to the configured port."""
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config(bad_url, 8000)
+
+        assert manager.get_server_url() == "http://localhost:8000"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
 

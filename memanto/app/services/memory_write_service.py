@@ -3,7 +3,7 @@ Memory Write Service
 """
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from moorcheh_sdk import MoorchehClient
@@ -93,14 +93,10 @@ class MemoryWriteService:
             namespace = memory.namespace()
 
             # Validate memory (write-time contradiction resolution)
-            validation_result = self.validation_service.validate_memory(
-                memory, context
-            )
+            validation_result = self.validation_service.validate_memory(memory, context)
             # Use validated memory if modified
             if "memory" in validation_result:
                 memory = validation_result["memory"]
-
-            from typing import cast
 
             from moorcheh_sdk.types.document import Document
 
@@ -224,17 +220,16 @@ class MemoryWriteService:
                         )
                         # Use validated memory if modified
                         if "memory" in validation_result:
-                            memory = validation_result["memory"]
-
-                    from typing import cast
+                            memory = cast(MemoryRecord, validation_result["memory"])
 
                     from moorcheh_sdk.types.document import Document
 
                     # Convert to Moorcheh document
-                    document = cast(Document, memory.to_moorcheh_document())
+                    document_payload = memory.to_moorcheh_document()
                     if batch_note:
-                        document["superseded_by"] = batch_note
-                        document["superseded_at"] = now.isoformat()
+                        document_payload["superseded_by"] = batch_note
+                        document_payload["superseded_at"] = now.isoformat()
+                    document = cast(Document, document_payload)
                     validated_documents.append(document)
 
                     # Store validation result for later
@@ -245,7 +240,7 @@ class MemoryWriteService:
                         "reason": validation_result.get(
                             "reason", "Validated successfully"
                         ),
-                        "type": memory.type,
+                        "type": memory.type or "fact",
                     }
                     if validation_result.get("superseded_ids"):
                         result_entry["superseded_ids"] = validation_result[
@@ -267,8 +262,6 @@ class MemoryWriteService:
 
             # Upload all validated documents in single batch to Moorcheh
             if validated_documents and first_namespace:
-                from typing import cast
-
                 upload_result = self.client.documents.upload(
                     namespace_name=cast(str, first_namespace),
                     documents=validated_documents,

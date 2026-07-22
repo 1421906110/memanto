@@ -5,14 +5,14 @@ from memanto.app.services.memory_write_service import MemoryWriteService
 
 
 def make_memory(**overrides):
-    defaults = dict(
-        content="The user's favorite color is red.",
-        type="fact",
-        title="Favorite Color",
-        agent_id="test-agent",
-        actor_id="user",
-        source="user",
-    )
+    defaults = {
+        "content": "The user's favorite color is red.",
+        "type": "fact",
+        "title": "Favorite Color",
+        "agent_id": "test-agent",
+        "actor_id": "user",
+        "source": "user",
+    }
     defaults.update(overrides)
     return MemoryRecord(**defaults)
 
@@ -128,9 +128,7 @@ class TestContradictionHandling:
         client = make_client()
         write_service = MemoryWriteService(client)
 
-        memory1 = make_memory(
-            content="The user lives in New York.", title="Location"
-        )
+        memory1 = make_memory(content="The user lives in New York.", title="Location")
         memory2 = make_memory(content="The user lives in London.", title="Location")
 
         result = write_service.batch_store_memories([memory1, memory2])
@@ -146,9 +144,7 @@ class TestContradictionHandling:
         client = make_client()
         write_service = MemoryWriteService(client)
 
-        memory1 = make_memory(
-            content="The user lives in New York.", title="Location"
-        )
+        memory1 = make_memory(content="The user lives in New York.", title="Location")
         memory2 = make_memory(content="The user lives in London.", title="Location")
 
         result = write_service.batch_store_memories([memory1, memory2])

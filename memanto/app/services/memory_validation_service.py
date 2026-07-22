@@ -5,7 +5,7 @@ Write-time contradiction detection and resolution for memory records.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from moorcheh_sdk import MoorchehClient
@@ -185,8 +185,11 @@ class MemoryValidationService:
             if tags:
                 document["tags"] = ",".join(tags) if isinstance(tags, list) else tags
 
+            from moorcheh_sdk.types.document import Document
+
             self.client.documents.upload(
-                namespace_name=namespace, documents=[document]
+                namespace_name=namespace,
+                documents=[cast(Document, document)],
             )
             return True
 

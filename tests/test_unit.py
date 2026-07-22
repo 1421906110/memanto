@@ -1092,6 +1092,8 @@ class TestServerConfigUrl:
         manager.set_server_config(bad_url, 8000)
 
         assert manager.get_server_url() == "http://localhost:8000"
+
+
 class TestServerConfigValidation:
     """Regression tests for local REST API server config validation."""
 
@@ -1111,6 +1113,58 @@ class TestServerConfigValidation:
 
         with pytest.raises(ValueError, match="server port"):
             manager.set_server_config("localhost", invalid_port)
+
+
+class TestSessionConfigValidation:
+    """Regression tests for user-editable session config."""
+
+    def test_set_session_config_normalizes_integer_fields(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_session_config(
+            {
+                "default_duration_hours": "12",
+                "extend_threshold_minutes": "45",
+                "auto_renew_enabled": False,
+            }
+        )
+
+        session = manager.get_session_config()
+        assert session["default_duration_hours"] == 12
+        assert session["extend_threshold_minutes"] == 45
+        assert session["auto_renew_enabled"] is False
+
+    @pytest.mark.parametrize(
+        ("key", "value"),
+        [
+            ("default_duration_hours", 0),
+            ("default_duration_hours", 169),
+            ("extend_threshold_minutes", "abc"),
+            ("warn_before_expiry_minutes", 1.5),
+            ("auto_renew_interval_hours", True),
+            ("auto_extend", "false"),
+            ("unexpected", 1),
+        ],
+    )
+    def test_set_session_config_rejects_invalid_values(self, tmp_path, key, value):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+
+        with pytest.raises(ValueError):
+            manager.set_session_config({key: value})
+
+    def test_set_session_config_rejects_corrupt_stored_session(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.save_yaml({"session": "bad"})
+
+        with pytest.raises(ValueError, match="stored session config must be an object"):
+            manager.set_session_config({"default_duration_hours": 12})
+
+        assert manager.load_yaml()["session"] == "bad"
 
 
 if __name__ == "__main__":

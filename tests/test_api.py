@@ -2519,6 +2519,59 @@ class TestCWE200ApiKeyLeak:
         )
 
     @pytest.mark.asyncio
+    async def test_config_update_validates_session_config(
+        self, client, _mock_ui_config_manager
+    ):
+        _mock_ui_config_manager.set_session_config.side_effect = ValueError(
+            "default_duration_hours must be an integer between 1 and 168"
+        )
+
+        response = await client.patch(
+            "/api/ui/config",
+            json={"session": {"default_duration_hours": 0}},
+        )
+
+        assert response.status_code == 400
+        assert "default_duration_hours" in response.json()["detail"]
+        _mock_ui_config_manager.set_session_config.assert_called_once_with(
+            {"default_duration_hours": 0}
+        )
+        _mock_ui_config_manager.save_yaml.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_config_update_rejects_non_object_session_config(
+        self, client, _mock_ui_config_manager
+    ):
+        response = await client.patch(
+            "/api/ui/config",
+            json={"session": "bad"},
+        )
+
+        assert response.status_code == 400
+        assert "session must be an object" in response.json()["detail"]
+        _mock_ui_config_manager.set_session_config.assert_not_called()
+        _mock_ui_config_manager.save_yaml.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_config_update_accepts_valid_session_config(
+        self, client, _mock_ui_config_manager
+    ):
+        response = await client.patch(
+            "/api/ui/config",
+            json={
+                "session": {
+                    "default_duration_hours": 12,
+                    "auto_renew_enabled": False,
+                }
+            },
+        )
+
+        assert response.status_code == 200
+        _mock_ui_config_manager.set_session_config.assert_called_once_with(
+            {"default_duration_hours": 12, "auto_renew_enabled": False}
+        )
+
+    @pytest.mark.asyncio
     async def test_traversal_filename_is_sanitized(
         self, client, auth_headers, mock_moorcheh
     ):

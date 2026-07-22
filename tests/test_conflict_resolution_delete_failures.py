@@ -125,10 +125,10 @@ def test_conflict_stays_unresolved_when_required_delete_returns_false(
     ],
 )
 @pytest.mark.parametrize("delete_result", [RuntimeError("backend unavailable"), False])
-def test_manual_conflict_resolution_does_not_store_replacement_after_delete_failure(
+def test_manual_conflict_resolution_does_not_mark_resolved_after_delete_failure(
     module_path, class_name, delete_result, tmp_path, monkeypatch
 ):
-    """Block manual replacement storage until required deletions succeed."""
+    """Store replacement first, but do not mark resolved if deletions fail."""
     client_module = pytest.importorskip(module_path)
     client_class = getattr(client_module, class_name)
     monkeypatch.setattr(
@@ -162,4 +162,4 @@ def test_manual_conflict_resolution_does_not_store_replacement_after_delete_fail
     persisted = json.loads(report_path.read_text(encoding="utf-8"))
     assert persisted[0]["resolved"] is False
     assert persisted[0]["resolution"] is None
-    write_service.store_memory.assert_not_called()
+    write_service.store_memory.assert_called_once()

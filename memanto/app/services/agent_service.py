@@ -132,7 +132,7 @@ class AgentService:
         Returns:
             AgentList with all agents
         """
-        agents = []
+        agents: list[AgentInfo] = []
         if not self.agents_dir.exists():
             return AgentList(agents=agents, count=0)
 

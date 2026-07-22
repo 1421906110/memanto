@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 from memanto.app.core import MemoryRecord
 from memanto.app.services.memory_parsing_service import MemoryParsingService
+from memanto.app.services.memory_validation_service import MemoryValidationService
 from memanto.app.utils.errors import MemoryError
 from memanto.app.utils.ids import generate_memory_id
 from memanto.app.utils.temporal_helpers import as_utc_aware
@@ -41,6 +42,7 @@ class MemoryWriteService:
 
         self.client = moorcheh_client
         self._parser = MemoryParsingService()
+        self.validation_service = MemoryValidationService(moorcheh_client)
         self._namespace_service = None
 
     @property
@@ -90,13 +92,13 @@ class MemoryWriteService:
             # Add namespace
             namespace = memory.namespace()
 
-            # skip validation for speed
-            ## Validate memory
-            # validation_result = self.validation_service.validate_memory(memory, context)
-            ## Use validated memory if modified
-            # if "memory" in validation_result:
-            #     memory = validation_result["memory"]
-            validation_result = {"action": "store", "reason": "MVP direct store"}
+            # Validate memory (write-time contradiction resolution)
+            validation_result = self.validation_service.validate_memory(
+                memory, context
+            )
+            # Use validated memory if modified
+            if "memory" in validation_result:
+                memory = validation_result["memory"]
 
             from typing import cast
 
@@ -110,7 +112,7 @@ class MemoryWriteService:
                 namespace_name=namespace, documents=[document]
             )
 
-            return {
+            response = {
                 "id": memory.id,
                 "namespace": namespace,
                 "status": result.get("status", "unknown"),
@@ -120,6 +122,9 @@ class MemoryWriteService:
                 "memory_status": memory.status,
                 "type": memory.type,
             }
+            if validation_result.get("superseded_ids"):
+                response["superseded_ids"] = validation_result["superseded_ids"]
+            return response
 
         except Exception as e:
             raise MemoryError(f"Failed to store memory: {e}")
@@ -150,6 +155,7 @@ class MemoryWriteService:
             first_namespace = None
             results = []
             validated_documents = []
+            prepared: list[MemoryRecord] = []
 
             # Enforce server-side timestamps for batch (single timestamp for all)
             now = datetime.now(timezone.utc)
@@ -182,16 +188,43 @@ class MemoryWriteService:
                         )
                         continue
 
-                    # skip validation for speed
-                    ## Validate memory
-                    # validation_result = self.validation_service.validate_memory(memory, context)
-                    ## Use validated memory if modified
-                    # if "memory" in validation_result:
-                    #     memory = validation_result["memory"]
-                    validation_result = {
-                        "action": "store",
-                        "reason": "MVP direct store",
-                    }
+                    prepared.append(memory)
+
+                except Exception as e:
+                    results.append(
+                        {
+                            "id": memory.id
+                            if hasattr(memory, "id") and memory.id
+                            else "unknown",
+                            "status": "failed",
+                            "action": "rejected",
+                            "error": str(e),
+                        }
+                    )
+
+            # Resolve contradictions within the batch itself: for memories of
+            # the same type and title with different content, the last one
+            # wins and earlier ones are stored as superseded history.
+            superseded_in_batch = self.validation_service.resolve_batch_contradictions(
+                prepared
+            )
+
+            for memory in prepared:
+                try:
+                    batch_note = superseded_in_batch.get(memory.id)
+                    if batch_note:
+                        validation_result = {
+                            "action": "store_superseded",
+                            "reason": f"contradiction resolved: superseded within batch by {batch_note}",
+                        }
+                    else:
+                        # Validate memory (write-time contradiction resolution)
+                        validation_result = self.validation_service.validate_memory(
+                            memory, context
+                        )
+                        # Use validated memory if modified
+                        if "memory" in validation_result:
+                            memory = validation_result["memory"]
 
                     from typing import cast
 
@@ -199,20 +232,26 @@ class MemoryWriteService:
 
                     # Convert to Moorcheh document
                     document = cast(Document, memory.to_moorcheh_document())
+                    if batch_note:
+                        document["superseded_by"] = batch_note
+                        document["superseded_at"] = now.isoformat()
                     validated_documents.append(document)
 
                     # Store validation result for later
-                    results.append(
-                        {
-                            "id": memory.id,
-                            "status": "pending",
-                            "action": validation_result.get("action", "store"),
-                            "reason": validation_result.get(
-                                "reason", "Validated successfully"
-                            ),
-                            "type": memory.type,
-                        }
-                    )
+                    result_entry = {
+                        "id": memory.id,
+                        "status": "pending",
+                        "action": validation_result.get("action", "store"),
+                        "reason": validation_result.get(
+                            "reason", "Validated successfully"
+                        ),
+                        "type": memory.type,
+                    }
+                    if validation_result.get("superseded_ids"):
+                        result_entry["superseded_ids"] = validation_result[
+                            "superseded_ids"
+                        ]
+                    results.append(result_entry)
 
                 except Exception as e:
                     results.append(

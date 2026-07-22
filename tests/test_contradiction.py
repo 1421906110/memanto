@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock
 
 from memanto.app.core import MemoryRecord
+from memanto.app.services.memory_validation_service import MemoryValidationService
 from memanto.app.services.memory_write_service import MemoryWriteService
 
 
@@ -61,6 +62,28 @@ class TestContradictionHandling:
         )
         assert result["reason"] == "validated: no contradicting memories found"
         assert result["action"] == "store"
+
+    def test_find_contradictions_matches_same_title_beyond_default_page(self):
+        """Same-title contradictions outside the default top-10 page must still match."""
+        filler = [
+            existing_doc(
+                memory_id=f"filler-{i}",
+                title=f"Other topic {i}",
+                content=f"Unrelated body {i}",
+            )
+            for i in range(12)
+        ]
+        contradicting = existing_doc(
+            memory_id="old-1",
+            title="Favorite Color",
+            content="The user's favorite color is blue.",
+        )
+        client = make_client(search_results=filler + [contradicting])
+        service = MemoryValidationService(client)
+
+        conflicts = service._find_contradictions(make_memory())
+
+        assert [item["id"] for item in conflicts] == ["old-1"]
 
     def test_store_memory_supersedes_contradicting_memory(self):
         """A same-type/same-title active memory with different content is

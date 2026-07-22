@@ -28,8 +28,10 @@ class MemoryValidationService:
     Deeper semantic conflicts remain the job of the offline conflict report.
     """
 
-    # How many similar memories to inspect per write.
-    SEARCH_LIMIT = 10
+    # How many candidates to inspect after server-side type/status filtering.
+    # Must align with MemoryReadService's post-filter pool so same-title records
+    # are not dropped by default pagination before title matching runs.
+    CANDIDATE_LIMIT = 100
 
     def __init__(self, moorcheh_client: "MoorchehClient"):
         self.client = moorcheh_client
@@ -123,24 +125,30 @@ class MemoryValidationService:
         """Find active memories of the same type/title with different content."""
         from memanto.app.services.memory_read_service import MemoryReadService
 
+        memory_type = memory.type or "fact"
+        title = memory.title.strip()
+        title_key = title.lower()
+        content = memory.content.strip()
+
         read_service = MemoryReadService(self.client)
+        # Title is embedded in Moorcheh document text (`[TYPE] title\\n\\ncontent`).
+        # Query by title (not incoming content) so same-title records are ranked
+        # in even when content diverges sharply.
         search = read_service.search_memories(
-            query=memory.content,
+            query=title,
             agent_id=memory.agent_id,
-            type=[memory.type or "fact"],
+            type=[memory_type],
             status_filter=["active"],
-            limit=self.SEARCH_LIMIT,
+            limit=self.CANDIDATE_LIMIT,
         )
 
-        title = memory.title.strip().lower()
-        content = memory.content.strip()
         conflicts = []
         for item in search.get("results", []):
             if not item.get("id") or item.get("id") == memory.id:
                 continue
             if (item.get("status") or "active") != "active":
                 continue
-            if (item.get("title") or "").strip().lower() != title:
+            if (item.get("title") or "").strip().lower() != title_key:
                 continue
             if (item.get("content") or "").strip() == content:
                 # Identical content is a duplicate, not a contradiction.

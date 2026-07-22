@@ -249,6 +249,31 @@ class TestMEMANTOAPI:
             assert "metadata" not in data["agents"][0]
 
     @pytest.mark.asyncio
+    async def test_list_agents_skips_malformed_namespace_count_rows(
+        self, client, auth_headers, mock_moorcheh
+    ):
+        """Malformed namespace rows must not hide valid live memory counts."""
+        await client.post(
+            "/api/v2/agents",
+            headers=auth_headers,
+            json={"agent_id": self.TEST_AGENT_ID, "pattern": "support"},
+        )
+        mock_moorcheh.namespaces.list.return_value = {
+            "namespaces": [
+                "truncated-row",
+                {"namespace_name": None, "item_count": 99},
+                {"namespace_name": f"memanto_agent_{self.TEST_AGENT_ID}", "item_count": "7"},
+            ]
+        }
+
+        response = await client.get("/api/v2/agents", headers=auth_headers)
+
+        assert response.status_code == 200
+        agents = response.json()["agents"]
+        agent = next(a for a in agents if a["agent_id"] == self.TEST_AGENT_ID)
+        assert agent["memory_count"] == 7
+
+    @pytest.mark.asyncio
     async def test_activate_session(self, client, auth_headers):
         """Test activating an agent session"""
         # Ensure agent exists (will be created in memory by AgentService for this test session)

@@ -416,7 +416,9 @@ def test_local_services_do_not_create_storage_on_init(tmp_path, monkeypatch):
     assert not sessions_dir.exists()
     assert not (tmp_path / "secret_key").exists()
     assert agent_service.list_agents().count == 0
-    assert session_service._generate_namespace("test-agent") == "memanto_agent_test-agent"
+    assert (
+        session_service._generate_namespace("test-agent") == "memanto_agent_test-agent"
+    )
 
 
 class TestMemoryWriteServiceDelete:

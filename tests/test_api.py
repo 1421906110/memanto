@@ -262,7 +262,10 @@ class TestMEMANTOAPI:
             "namespaces": [
                 "truncated-row",
                 {"namespace_name": None, "item_count": 99},
-                {"namespace_name": f"memanto_agent_{self.TEST_AGENT_ID}", "item_count": "7"},
+                {
+                    "namespace_name": f"memanto_agent_{self.TEST_AGENT_ID}",
+                    "item_count": "7",
+                },
             ]
         }
 

@@ -1092,6 +1092,25 @@ class TestServerConfigUrl:
         manager.set_server_config(bad_url, 8000)
 
         assert manager.get_server_url() == "http://localhost:8000"
+class TestServerConfigValidation:
+    """Regression tests for local REST API server config validation."""
+
+    def test_set_server_config_persists_integer_port(self, tmp_path):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+        manager.set_server_config("localhost", "8000")
+
+        assert manager.get_server_config()["port"] == 8000
+
+    @pytest.mark.parametrize("invalid_port", [0, 65536, "abc", 1.5, True])
+    def test_set_server_config_rejects_invalid_port(self, tmp_path, invalid_port):
+        from memanto.cli.config.manager import ConfigManager
+
+        manager = ConfigManager(config_dir=tmp_path)
+
+        with pytest.raises(ValueError, match="server port"):
+            manager.set_server_config("localhost", invalid_port)
 
 
 if __name__ == "__main__":

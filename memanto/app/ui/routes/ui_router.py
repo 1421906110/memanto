@@ -29,7 +29,7 @@ from memanto.app.config import settings
 from memanto.app.routes.auth_deps import clear_session_cookie, set_session_cookie
 from memanto.app.utils.validation import validate_safe_id
 from memanto.cli.client.direct_client import DirectClient
-from memanto.cli.config.manager import ConfigManager
+from memanto.cli.config.manager import ConfigManager, _validate_server_port
 from memanto.cli.connect.agent_registry import AGENT_REGISTRY, list_agents
 from memanto.cli.connect.engine import install_agent, remove_agent
 
@@ -187,6 +187,14 @@ async def update_ui_config(updates: dict, _: None = Depends(_require_local)):
             status_code=400,
             detail=f"Cannot update keys: {', '.join(rejected)}. Allowed: {', '.join(allowed_keys)}",
         )
+
+    if "server" in updates and isinstance(updates["server"], dict):
+        server_updates = updates["server"]
+        if "port" in server_updates:
+            try:
+                server_updates["port"] = _validate_server_port(server_updates["port"])
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if "schedule_time" in updates:
         _config_manager.set_schedule_time(updates["schedule_time"])

@@ -31,6 +31,21 @@ def _normalize_duplicated_api_key(key: str) -> str:
     return key
 
 
+def _validate_server_port(port) -> int:
+    """Return a valid TCP port or raise ValueError."""
+    if isinstance(port, bool):
+        raise ValueError("server port must be an integer between 1 and 65535")
+    try:
+        validated = int(port)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("server port must be an integer between 1 and 65535") from exc
+    if isinstance(port, float) and not port.is_integer():
+        raise ValueError("server port must be an integer between 1 and 65535")
+    if validated < 1 or validated > 65535:
+        raise ValueError("server port must be an integer between 1 and 65535")
+    return validated
+
+
 class ConfigManager:
     """Manages MEMANTO CLI configuration.
 
@@ -436,11 +451,12 @@ class ConfigManager:
 
     def set_server_config(self, url: str, port: int) -> None:
         """Set fallback server configuration."""
+        validated_port = _validate_server_port(port)
         data = self.load_yaml()
         if "server" not in data:
             data["server"] = {}
         data["server"]["url"] = url
-        data["server"]["port"] = port
+        data["server"]["port"] = validated_port
         self.save_yaml(data)
 
     def set_cli_config(self, interactive_mode: bool, smart_parse: bool) -> None:

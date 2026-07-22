@@ -210,19 +210,13 @@ class MemoryValidationService:
     def _supersede(self, old_item: dict[str, Any], new_memory: MemoryRecord) -> bool:
         """Mark an existing memory as superseded by the new one.
 
-        Moorcheh has no in-place update, so this follows the same
-        delete-and-recreate pattern as update_memory. Returns False instead of
-        raising so one bad record cannot block the new write.
+        Upload the superseded document first (same ID overwrites in Moorcheh).
+        Returns False instead of raising so one bad record cannot block the new
+        write; a failed upload leaves the original document untouched.
         """
         try:
             old_id = str(old_item.get("id"))
             namespace = new_memory.namespace()
-
-            delete_result = self.client.documents.delete(
-                namespace_name=namespace, ids=[old_id]
-            )
-            if delete_result.get("actual_deletions", 0) == 0:
-                return False
 
             now_iso = datetime.utcnow().isoformat()
             document: dict[str, Any] = {
@@ -246,10 +240,13 @@ class MemoryValidationService:
 
             from moorcheh_sdk.types.document import Document
 
-            self.client.documents.upload(
+            upload_result = self.client.documents.upload(
                 namespace_name=namespace,
                 documents=[cast(Document, document)],
             )
+            upload_status = str(upload_result.get("status", "unknown")).lower()
+            if upload_status not in {"queued", "success", "ok"}:
+                return False
             return True
 
         except Exception:

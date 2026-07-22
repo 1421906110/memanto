@@ -128,9 +128,7 @@ class TestContradictionHandling:
         assert "contradiction resolved: superseded old-1" in result["reason"]
 
         # Old memory was rewritten as superseded history, not dropped.
-        client.documents.delete.assert_called_once_with(
-            namespace_name="memanto_agent_test-agent", ids=["old-1"]
-        )
+        client.documents.delete.assert_not_called()
         uploads = client.documents.upload.call_args_list
         assert len(uploads) == 2
         superseded_doc = uploads[0].kwargs["documents"][0]
@@ -151,6 +149,21 @@ class TestContradictionHandling:
         result = write_service.store_memory(make_memory())
 
         assert result["reason"] == "validated: no contradicting memories found"
+        client.documents.delete.assert_not_called()
+
+    def test_supersede_returns_false_when_upload_fails(self):
+        """Failed supersede upload must not delete the original document."""
+        client = make_client(search_results=[existing_doc()])
+        client.documents.upload.side_effect = [
+            {"status": "failed"},
+            {"status": "success"},
+        ]
+        write_service = MemoryWriteService(client)
+
+        result = write_service.store_memory(make_memory())
+
+        assert result.get("superseded_ids", []) == []
+        assert "failed to supersede old-1" in result["reason"]
         client.documents.delete.assert_not_called()
 
     def test_exempt_type_skips_conflict_check(self):

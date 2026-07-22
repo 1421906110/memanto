@@ -1312,18 +1312,8 @@ class SdkClient:
             if not manual_content:
                 raise ValueError("manual_content is required when action is 'manual'")
 
-            # Delete both, store manual replacement
-            for mem_id, label in [(old_id, "old"), (new_id, "new")]:
-                delete_required_memory(mem_id, label, f"deleted_{label}")
-
-            if delete_failures:
-                failures = "; ".join(delete_failures)
-                raise ValueError(
-                    "Could not resolve conflict because required memory deletion "
-                    f"failed: {failures}"
-                )
-
-            # Store the manual replacement
+            # Store the replacement before deleting originals so a failed write
+            # cannot erase both sides of the conflict.
             mem_type = manual_type or conflict.get("type", "fact")
             if not isinstance(mem_type, str):
                 mem_type = "fact"
@@ -1351,6 +1341,9 @@ class SdkClient:
             )
             store_result = write_service.store_memory(memory)
             result_details["new_memory_id"] = store_result.get("id")
+
+            for mem_id, label in [(old_id, "old"), (new_id, "new")]:
+                delete_required_memory(mem_id, label, f"deleted_{label}")
 
         if delete_failures:
             failures = "; ".join(delete_failures)

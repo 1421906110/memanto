@@ -20,6 +20,9 @@
   <a href="https://memanto.ai/discord">
     <img src="https://img.shields.io/badge/Join-Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Discord">
   </a>
+  <a href="https://www.reddit.com/r/Memanto/">
+    <img src="https://img.shields.io/badge/Join-Reddit-FF4500?style=for-the-badge&logo=reddit&logoColor=white" alt="Join Reddit">
+  </a>
   <a href="https://www.youtube.com/watch?v=vEtOaoweIG4">
     <img src="https://img.shields.io/badge/Setup-Video-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Setup Video">
   </a>
@@ -256,6 +259,7 @@ Full endpoint reference is available at [docs.memanto.ai/api](https://docs.meman
 Have questions or feedback? We're here to help:
 - **Docs**: [https://docs.memanto.ai](https://docs.memanto.ai)
 - **Discord**: [Join our Discord server](https://memanto.ai/discord)
+- **Reddit**: [Join our Reddit community](https://www.reddit.com/r/Memanto/)
 - **Email**: support@moorcheh.ai
 - **X / Twitter**: [@moorcheh_ai](https://x.com/moorcheh_ai)
 
